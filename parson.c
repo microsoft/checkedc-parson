@@ -126,7 +126,7 @@ static _Ptr<JSON_Value> json_value_init_string_no_copy(char *string : itype(_Nt_
 
 /* Parser */
 static JSON_Status      skip_quotes(const char **string : itype(_Ptr<_Nt_array_ptr<const char>> ) );
-static int              parse_utf16(const char **unprocessed : itype(_Ptr<_Nt_array_ptr<const char>> ) , char **processed : itype(_Ptr<_Nt_array_ptr<char>> ) );
+static _Nt_array_ptr<char> parse_utf16(_Nt_array_ptr<const char> unprocessed,  _Ptr<size_t> un_skip, _Ptr<size_t> pro_len, _Ptr<int> status);
 static char *           process_string(const char *input : itype(_Nt_array_ptr<const char>) count(len), size_t len) : itype(_Nt_array_ptr<char>);
 static char *           get_quoted_string(const char **string : itype(_Ptr<_Nt_array_ptr<const char>> ) ) : itype(_Nt_array_ptr<char>);
 static _Ptr<JSON_Value> parse_object_value(const char **string : itype(_Ptr<_Nt_array_ptr<const char>> ) , size_t nesting);
@@ -565,25 +565,19 @@ static JSON_Status skip_quotes(const char **string : itype(_Ptr<_Nt_array_ptr<co
     return JSONSuccess;
 }
 
-_Unchecked static int parse_utf16(const char **unprocessed : itype(_Ptr<_Nt_array_ptr<const char>>), char **processed : itype(_Ptr<_Nt_array_ptr<char>>)) {
+_Unchecked static _Nt_array_ptr<char> parse_utf16(_Nt_array_ptr<const char> unprocessed, _Ptr<size_t> un_skip, _Ptr<size_t> pro_len, _Ptr<int> status) {
     unsigned int cp, lead, trail;
     int parse_succeeded = 0;
-    size_t string_length = strlen(*unprocessed);
-    // This function has only one caller: process_string. The second argument is malloc'd to
-    // have len + 1 of the first argument in that function. Therefore assigning this as bounds
-    // is brittle but correct.
-
-    //_Nt_array_ptr<char>  : count(string_length + 1)
-    char* processed_ptr = NULL;
-    _Unchecked {
-        processed_ptr = *processed; //_Assume_bounds_cast<_Nt_array_ptr<char>>(*processed, count(string_length + 1));
-    }
-    //_Nt_array_ptr<const char> 
-    const char* unprocessed_ptr = (const char*)*unprocessed;
+    *pro_len = 0;
+    size_t string_length = strlen(unprocessed);
+    _Nt_array_ptr<char> processed_ptr : count(string_length + 1) = (_Nt_array_ptr<char>)malloc(string_length + 1);
+    _Nt_array_ptr<const char> unprocessed_ptr = unprocessed;
     unprocessed_ptr++; /* skips u */
     parse_succeeded = parse_utf16_hex(_Assume_bounds_cast<_Nt_array_ptr<const char>>(unprocessed_ptr, count(0)), &cp);
     if (!parse_succeeded) {
-        return JSONFailure;
+        *status = JSONFailure;
+        parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0)));
+        return NULL;
     }
     // Note: If parse_succeeded, that means there are at least 4 elements in unprocessed.
     // By the logic of this function's only caller, processed is the same size as unprocessed.
@@ -594,24 +588,34 @@ _Unchecked static int parse_utf16(const char **unprocessed : itype(_Ptr<_Nt_arra
         processed_ptr[0] = ((cp >> 6) & 0x1F) | 0xC0; /* 110xxxxx */
         processed_ptr[1] = ((cp)      & 0x3F) | 0x80; /* 10xxxxxx */
         processed_ptr += 1;
+        *pro_len += 1;
     } else if (cp < 0xD800 || cp > 0xDFFF) {
         processed_ptr[0] = ((cp >> 12) & 0x0F) | 0xE0; /* 1110xxxx */
         processed_ptr[1] = ((cp >> 6)  & 0x3F) | 0x80; /* 10xxxxxx */
         processed_ptr[2] = ((cp)       & 0x3F) | 0x80; /* 10xxxxxx */
         processed_ptr += 2;
+        *pro_len += 2;
     } else if (cp >= 0xD800 && cp <= 0xDBFF) { /* lead surrogate (0xD800..0xDBFF) */
         lead = cp;
         unprocessed_ptr += 4; /* should always be within the buffer, otherwise previous sscanf would fail */
-        if (*unprocessed_ptr == '\0' || *unprocessed_ptr++ != '\\') {
-            return JSONFailure;
+        if (*unprocessed_ptr == '\0' || *unprocessed_ptr != '\\') {
+            *status = JSONFailure;
+            parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0)));
+            return NULL;
         }
-        if (*unprocessed_ptr == '\0' || *unprocessed_ptr++ != 'u') {
-            return JSONFailure;
+        unprocessed_ptr++;
+        if (*unprocessed_ptr == '\0' || *unprocessed_ptr != 'u') {
+            *status = JSONFailure;
+            parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0)));
+            return NULL;
         }
+        unprocessed_ptr++;
         // TODO This should not need a cast: string_length >= 0
         parse_succeeded = parse_utf16_hex(_Assume_bounds_cast<_Nt_array_ptr<char>>(unprocessed_ptr, count(0)), &trail);
         if (!parse_succeeded || trail < 0xDC00 || trail > 0xDFFF) { /* valid trail surrogate? (0xDC00..0xDFFF) */
-            return JSONFailure;
+            *status = JSONFailure;
+            parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0)));
+            return NULL;
         }
         cp = ((((lead - 0xD800) & 0x3FF) << 10) | ((trail - 0xDC00) & 0x3FF)) + 0x010000;
         processed_ptr[0] = (((cp >> 18) & 0x07) | 0xF0); /* 11110xxx */
@@ -619,14 +623,16 @@ _Unchecked static int parse_utf16(const char **unprocessed : itype(_Ptr<_Nt_arra
         processed_ptr[2] = (((cp >> 6)  & 0x3F) | 0x80); /* 10xxxxxx */
         processed_ptr[3] = (((cp)       & 0x3F) | 0x80); /* 10xxxxxx */
         processed_ptr += 3;
+        *pro_len += 3;
     } else { /* trail surrogate before lead surrogate */
-        return JSONFailure;
+        *status = JSONFailure;
+        parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0)));
+        return NULL;
     }
     unprocessed_ptr += 3;
-    // TODO This should also not need a cast
-    *processed = processed_ptr; //_Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0));
-    *unprocessed = unprocessed_ptr;
-    return JSONSuccess;
+    *un_skip = unprocessed_ptr - unprocessed;
+    *status = JSONSuccess;
+    return processed_ptr;
 }
 
 
@@ -636,7 +642,10 @@ static char* process_string(const char *input : itype(_Nt_array_ptr<const char>)
     _Nt_array_ptr<const char> input_ptr : count(len) = input;
     size_t initial_size = (len + 1) * sizeof(char);
     size_t final_size = 0;
-    _Nt_array_ptr<char> output : count(len + 1) = (_Nt_array_ptr<char>)parson_malloc(char, initial_size);
+    size_t utf16_in_skip, utf16_out_len;
+    int utf16_status;
+
+    _Nt_array_ptr<char> output : count(len+1) = (_Nt_array_ptr<char>)parson_malloc(char, initial_size+1);
     if (output == NULL) {
         goto error;
     }
@@ -654,19 +663,22 @@ static char* process_string(const char *input : itype(_Nt_array_ptr<const char>)
                 case 'r':  *output_ptr = '\r'; break;
                 case 't':  *output_ptr = '\t'; break;
                 case 'u':
-                    // TODO Cannot take address of variable with bounds, so cast to unchecked pointers.
+                {
                     _Unchecked {
-                        const char* temp_input_ptr[1] = { (const char*)input_ptr };
-                        char* temp_output_ptr[1] = { ((char*)output_ptr) };
-                        if (parse_utf16(temp_input_ptr, temp_output_ptr) == JSONFailure) {
+                        _Nt_array_ptr<char> utf16_processed = parse_utf16(_Assume_bounds_cast<_Nt_array_ptr<char>>(input_ptr, count(0)), &utf16_in_skip, &utf16_out_len, &utf16_status);
+                        if (utf16_status == JSONFailure) {
                             goto error;
                         }
+                        input_ptr += utf16_in_skip;
+                        memcpy(_Assume_bounds_cast<_Nt_array_ptr<char>>(output_ptr, count(utf16_out_len)), _Assume_bounds_cast<_Nt_array_ptr<char>>(utf16_processed, count(utf16_out_len)), utf16_out_len);
+                        output_ptr += utf16_out_len;
+                        break;
                     }
-                    break;
+                }
                 default:
                     goto error;
             }
-        } else if (*input_ptr < 0x20) {
+        } else if ((unsigned char)*input_ptr < 0x20) {
             goto error; /* 0x00-0x19 are invalid characters for json string (http://www.ietf.org/rfc/rfc4627.txt) */
         } else {
             *output_ptr = *input_ptr;
@@ -682,7 +694,8 @@ static char* process_string(const char *input : itype(_Nt_array_ptr<const char>)
     if (resized_output == NULL) {
         goto error;
     }
-    memcpy(resized_output, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(output, count(final_size)), final_size);
+    _Nt_array_ptr<char> tmp_rebounded_output : count(final_size) = _Dynamic_bounds_cast<_Nt_array_ptr<char>>(output, count(final_size));
+    memcpy(resized_output, tmp_rebounded_output, final_size);
     // TODO Compiler should be able to tell that the size of output is >= 0!
     parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(output, count(0)));
     return resized_output;

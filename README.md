@@ -14,7 +14,7 @@ To build and then run the unit tests: `make` or `make test`
 
 baseline: The original C code that the conversion starts from. Note that this is already behind the main parson project. This is the version used in Azure's IOT C SDK as of July 2018. This branch should pass all 325 unit tests.
 
-master: The converted CheckedC code.
+master: The converted CheckedC code. It fails 16 and passes 309 unit tests.
 
 # License
 
