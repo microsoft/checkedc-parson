@@ -26,10 +26,10 @@
 
 #include "parson.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
+#include <stdio_checked.h>
+#include <stdlib_checked.h>
+#include <string_checked.h>
+#include <math_checked.h>
 
 #define TEST(A) printf("%d %-72s-", __LINE__, #A);\
                 if(A){puts(" OK");tests_passed++;}\
@@ -58,7 +58,7 @@ static int malloc_count;
 static void *counted_malloc(size_t size);
 static void counted_free(void *ptr);
 
-static char * read_file(const char * filename);
+static char* read_file(_Nt_array_ptr<const char> filename) : itype(_Nt_array_ptr<char>);
 
 static int tests_passed;
 static int tests_failed;
@@ -220,7 +220,7 @@ void test_suite_2(JSON_Value *root_value) {
 }
 
 void test_suite_2_no_comments(void) {
-    const char *filename = "tests/test_2.txt";
+    _Nt_array_ptr<const char> filename = "tests/test_2.txt";
     JSON_Value *root_value = NULL;
     root_value = json_parse_file(filename);
     test_suite_2(root_value);
@@ -230,7 +230,7 @@ void test_suite_2_no_comments(void) {
 }
 
 void test_suite_2_with_comments(void) {
-    const char *filename = "tests/test_2_comments.txt";
+    _Nt_array_ptr<const char> filename = "tests/test_2_comments.txt";
     JSON_Value *root_value = NULL;
     root_value = json_parse_file_with_comments(filename);
     test_suite_2(root_value);
@@ -305,7 +305,7 @@ void test_suite_3(void) {
 }
 
 void test_suite_4() {
-    const char *filename = "tests/test_2.txt";
+    _Nt_array_ptr<const char> filename = "tests/test_2.txt";
     JSON_Value *a = NULL, *a_copy = NULL;
     printf("Testing %s:\n", filename);
     a = json_parse_file(filename);
@@ -443,7 +443,7 @@ void test_suite_5(void) {
 }
 
 void test_suite_6(void) {
-    const char *filename = "tests/test_2.txt";
+    _Nt_array_ptr<const char> filename = "tests/test_2.txt";
     JSON_Value *a = NULL;
     JSON_Value *b = NULL;
     a = json_parse_file(filename);
@@ -475,25 +475,31 @@ void test_suite_7(void) {
 }
 
 void test_suite_8(void) {
-    const char *filename = "tests/test_2.txt";
-    const char *temp_filename = "tests/test_2_serialized.txt";
+    _Nt_array_ptr<const char> filename = "tests/test_2.txt";
+    _Nt_array_ptr<const char> temp_filename = "tests/test_2_serialized.txt";
     JSON_Value *a = NULL;
     JSON_Value *b = NULL;
     char *buf = NULL;
     size_t serialization_size = 0;
     a = json_parse_file(filename);
-    TEST(json_serialize_to_file(a, temp_filename) == JSONSuccess);
-    b = json_parse_file(temp_filename);
-    TEST(json_value_equals(a, b));
-    remove(temp_filename);
-    serialization_size = json_serialization_size(a);
-    buf = json_serialize_to_string(a);
-    TEST((strlen(buf)+1) == serialization_size);
+    if (a != NULL)
+    {
+        TEST(json_serialize_to_file(a, temp_filename) == JSONSuccess);
+        b = json_parse_file(temp_filename);
+        if (b != NULL)
+        {
+            TEST(json_value_equals(a, b));
+        }
+        remove(temp_filename);
+        serialization_size = json_serialization_size(a);
+        buf = json_serialize_to_string(a);
+        TEST((strlen(buf)+1) == serialization_size);
+    }
 }
 
 void test_suite_9(void) {
-    const char *filename = "tests/test_2_pretty.txt";
-    const char *temp_filename = "tests/test_2_serialized_pretty.txt";
+    _Nt_array_ptr<const char> filename = "tests/test_2_pretty.txt";
+    _Nt_array_ptr<const char> temp_filename = "tests/test_2_serialized_pretty.txt";
     char *file_contents = NULL;
     char *serialized = NULL;
     JSON_Value *a = NULL;
@@ -506,11 +512,13 @@ void test_suite_9(void) {
     remove(temp_filename);
     serialization_size = json_serialization_size_pretty(a);
     serialized = json_serialize_to_string_pretty(a);
-    TEST((strlen(serialized)+1) == serialization_size);
+    if (serialized != NULL) {
+        TEST((strlen(serialized)+1) == serialization_size);
 
-    file_contents = read_file(filename);
+        file_contents = read_file(filename);
 
-    TEST(STREQ(file_contents, serialized));
+        TEST(STREQ(file_contents, serialized));
+    }
 }
 
 void test_suite_10(void) {
@@ -610,11 +618,10 @@ void serialization_example(void) {
     json_value_free(root_value);
 }
 
-static char * read_file(const char * filename) {
-    FILE *fp = fopen(filename, "r");
+_Checked static char *read_file(_Nt_array_ptr<const char> filename) : itype(_Nt_array_ptr<char>) {
+    _Ptr<FILE> fp = fopen(filename, "r");
     size_t file_size;
     long pos;
-    char *file_contents;
     if (!fp)
         return NULL;
     fseek(fp, 0L, SEEK_END);
@@ -625,7 +632,7 @@ static char * read_file(const char * filename) {
     }
     file_size = pos;
     rewind(fp);
-    file_contents = (char*)malloc(sizeof(char) * (file_size + 1));
+    _Nt_array_ptr<char> file_contents : count(file_size * (size_t)1) = (_Nt_array_ptr<char>) malloc<char>((file_size + 1) * sizeof(char));
     if (!file_contents) {
         fclose(fp);
         return NULL;
@@ -633,7 +640,8 @@ static char * read_file(const char * filename) {
     if (fread(file_contents, file_size, 1, fp) < 1) {
         if (ferror(fp)) {
             fclose(fp);
-            free(file_contents);
+            // TODO: This cast should not be needed
+            free<char>(_Dynamic_bounds_cast<_Array_ptr<char>>(file_contents, count(1)));
             return NULL;
         }
     }
