@@ -1593,6 +1593,7 @@ JSON_Status json_serialize_to_buffer(const JSON_Value *value : itype(_Ptr<const 
     }
     // TODO Compiler math buf_size_in_bytes >= 0
     written = json_serialize_to_buffer_r(value, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(0)), 0, 0, NULL);
+    buf[written] = '\0';
     if (written < 0) {
         return JSONFailure;
     }
@@ -1653,6 +1654,7 @@ JSON_Status json_serialize_to_buffer_pretty(const JSON_Value *value : itype(_Ptr
         return JSONFailure;
     }
     written = json_serialize_to_buffer_r(value, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(0)), 0, 1, NULL);
+    buf[written] = '\0';
     if (written < 0) {
         return JSONFailure;
     }
@@ -1687,7 +1689,7 @@ char * json_serialize_to_string_pretty(const JSON_Value *value : itype(_Ptr<cons
     if (buf_size_bytes == 0) {
         return NULL;
     }
-    _Nt_array_ptr<char> buf : byte_count(buf_size_bytes) = (_Nt_array_ptr<char>)parson_malloc(char, buf_size_bytes);
+    _Nt_array_ptr<char> buf : byte_count(buf_size_bytes) = (_Nt_array_ptr<char>)parson_malloc(char, buf_size_bytes+1);
     if (buf == NULL) {
         return NULL;
     }
