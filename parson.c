@@ -141,13 +141,13 @@ static _Ptr<JSON_Value> parse_value(const char **string : itype(_Ptr<_Nt_array_p
 /* Serialization */
 static int    json_serialize_to_buffer_r(const JSON_Value *value : itype(_Ptr<const JSON_Value> ),
                                          char *buf : itype(_Nt_array_ptr<char>) bounds(buf_start, buf_start + buf_len),
-                                         int level, int is_pretty, char *num_buf : itype(_Nt_array_ptr<char>), 
+                                         int level, int is_pretty, char *num_buf : itype(_Nt_array_ptr<char>),
                                          char *buf_start : itype(_Nt_array_ptr<char>), size_t buf_len );
 static int    json_serialize_string(const char *string : itype(_Nt_array_ptr<const char> ) , char *buf : itype(_Nt_array_ptr<char>) bounds(buf_start, buf_start + buf_len),
                                     char *buf_start : itype(_Nt_array_ptr<char>), unsigned int buf_len);
-static int    append_indent(char *buf : itype(_Nt_array_ptr<char>) bounds(buf_start, buf_start + buf_len), 
+static int    append_indent(char *buf : itype(_Nt_array_ptr<char>) bounds(buf_start, buf_start + buf_len),
                             int level, _Nt_array_ptr<char> buf_start, size_t buf_len);
-static int    append_string(_Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len), _Nt_array_ptr<const char> string,                         
+static int    append_string(_Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len), _Nt_array_ptr<const char> string,
                             _Nt_array_ptr<char> buf_start, size_t buf_len);
 
 /* Various */
@@ -887,7 +887,7 @@ static JSON_Value * parse_null_value(const char **string : itype(_Ptr<_Nt_array_
                                   if (buf != NULL) { buf += written; }\
                                   written_total += written; } while(0)
 
-static int json_serialize_to_buffer_r(const JSON_Value *value : itype(_Ptr<const JSON_Value>), 
+static int json_serialize_to_buffer_r(const JSON_Value *value : itype(_Ptr<const JSON_Value>),
                                       char *buf : itype(_Nt_array_ptr<char>) bounds(buf_start, buf_start + buf_len),
                                       int level, int is_pretty, char *num_buf : itype(_Nt_array_ptr<char>),
                                       char *buf_start : itype(_Nt_array_ptr<char>), size_t buf_len) {
@@ -1029,7 +1029,7 @@ static int json_serialize_to_buffer_r(const JSON_Value *value : itype(_Ptr<const
     }
 }
 
-static int json_serialize_string(const char *str_unbounded : itype(_Nt_array_ptr<const char>), 
+static int json_serialize_string(const char *str_unbounded : itype(_Nt_array_ptr<const char>),
                                  char *buf : itype(_Nt_array_ptr<char>) bounds(buf_start, buf_start + buf_len),
                                  char *buf_start : itype(_Nt_array_ptr<char>), unsigned int buf_len) {
     size_t i = 0, len = strlen(str_unbounded);
@@ -1100,7 +1100,7 @@ static int json_serialize_string(const char *str_unbounded : itype(_Nt_array_ptr
     return written_total;
 }
 
-static int append_indent(char *buf : itype(_Nt_array_ptr<char>) bounds(buf_start, buf_start + buf_len), 
+static int append_indent(char *buf : itype(_Nt_array_ptr<char>) bounds(buf_start, buf_start + buf_len),
                          int level, _Nt_array_ptr<char> buf_start, size_t buf_len) {
     int i;
     int written = -1, written_total = 0;
