@@ -126,7 +126,8 @@ static _Ptr<JSON_Value> json_value_init_string_no_copy(char *string : itype(_Nt_
 
 /* Parser */
 static JSON_Status      skip_quotes(const char **string : itype(_Ptr<_Nt_array_ptr<const char>> ) );
-static _Nt_array_ptr<char> parse_utf16(_Nt_array_ptr<const char> unprocessed,  _Ptr<size_t> un_skip, _Ptr<size_t> pro_len, _Ptr<int> status);
+// TODO: fix this
+static _Unchecked int   parse_utf16(const char **unprocessed, char **processed);
 static char *           process_string(const char *input : itype(_Nt_array_ptr<const char>) count(len), size_t len) : itype(_Nt_array_ptr<char>);
 static char *           get_quoted_string(const char **string : itype(_Ptr<_Nt_array_ptr<const char>> ) ) : itype(_Nt_array_ptr<char>);
 static _Ptr<JSON_Value> parse_object_value(const char **string : itype(_Ptr<_Nt_array_ptr<const char>> ) , size_t nesting);
@@ -565,57 +566,36 @@ static JSON_Status skip_quotes(const char **string : itype(_Ptr<_Nt_array_ptr<co
     return JSONSuccess;
 }
 
-_Unchecked static _Nt_array_ptr<char> parse_utf16(_Nt_array_ptr<const char> unprocessed, _Ptr<size_t> un_skip, _Ptr<size_t> pro_len, _Ptr<int> status) {
+_Unchecked static int parse_utf16(const char **unprocessed, char **processed) {
     unsigned int cp, lead, trail;
     int parse_succeeded = 0;
-    *pro_len = 0;
-    size_t string_length = strlen(unprocessed);
-    _Nt_array_ptr<char> processed_ptr : count(string_length + 1) = (_Nt_array_ptr<char>)malloc(string_length + 1);
-    _Nt_array_ptr<const char> unprocessed_ptr = unprocessed;
+    char *processed_ptr = *processed;
+    const char *unprocessed_ptr = *unprocessed;
     unprocessed_ptr++; /* skips u */
-    parse_succeeded = parse_utf16_hex(_Assume_bounds_cast<_Nt_array_ptr<const char>>(unprocessed_ptr, count(0)), &cp);
+    parse_succeeded = parse_utf16_hex(unprocessed_ptr, &cp);
     if (!parse_succeeded) {
-        *status = JSONFailure;
-        parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0)));
-        return NULL;
+        return JSONFailure;
     }
-    // Note: If parse_succeeded, that means there are at least 4 elements in unprocessed.
-    // By the logic of this function's only caller, processed is the same size as unprocessed.
-    _Dynamic_check(string_length >= 4);
     if (cp < 0x80) {
         processed_ptr[0] = (char)cp; /* 0xxxxxxx */
     } else if (cp < 0x800) {
         processed_ptr[0] = ((cp >> 6) & 0x1F) | 0xC0; /* 110xxxxx */
         processed_ptr[1] = ((cp)      & 0x3F) | 0x80; /* 10xxxxxx */
         processed_ptr += 1;
-        *pro_len += 1;
     } else if (cp < 0xD800 || cp > 0xDFFF) {
         processed_ptr[0] = ((cp >> 12) & 0x0F) | 0xE0; /* 1110xxxx */
         processed_ptr[1] = ((cp >> 6)  & 0x3F) | 0x80; /* 10xxxxxx */
         processed_ptr[2] = ((cp)       & 0x3F) | 0x80; /* 10xxxxxx */
         processed_ptr += 2;
-        *pro_len += 2;
     } else if (cp >= 0xD800 && cp <= 0xDBFF) { /* lead surrogate (0xD800..0xDBFF) */
         lead = cp;
         unprocessed_ptr += 4; /* should always be within the buffer, otherwise previous sscanf would fail */
-        if (*unprocessed_ptr == '\0' || *unprocessed_ptr != '\\') {
-            *status = JSONFailure;
-            parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0)));
-            return NULL;
+        if (*unprocessed_ptr++ != '\\' || *unprocessed_ptr++ != 'u') {
+            return JSONFailure;
         }
-        unprocessed_ptr++;
-        if (*unprocessed_ptr == '\0' || *unprocessed_ptr != 'u') {
-            *status = JSONFailure;
-            parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0)));
-            return NULL;
-        }
-        unprocessed_ptr++;
-        // TODO This should not need a cast: string_length >= 0
-        parse_succeeded = parse_utf16_hex(_Assume_bounds_cast<_Nt_array_ptr<char>>(unprocessed_ptr, count(0)), &trail);
+        parse_succeeded = parse_utf16_hex(unprocessed_ptr, &trail);
         if (!parse_succeeded || trail < 0xDC00 || trail > 0xDFFF) { /* valid trail surrogate? (0xDC00..0xDFFF) */
-            *status = JSONFailure;
-            parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0)));
-            return NULL;
+            return JSONFailure;
         }
         cp = ((((lead - 0xD800) & 0x3FF) << 10) | ((trail - 0xDC00) & 0x3FF)) + 0x010000;
         processed_ptr[0] = (((cp >> 18) & 0x07) | 0xF0); /* 11110xxx */
@@ -623,18 +603,14 @@ _Unchecked static _Nt_array_ptr<char> parse_utf16(_Nt_array_ptr<const char> unpr
         processed_ptr[2] = (((cp >> 6)  & 0x3F) | 0x80); /* 10xxxxxx */
         processed_ptr[3] = (((cp)       & 0x3F) | 0x80); /* 10xxxxxx */
         processed_ptr += 3;
-        *pro_len += 3;
     } else { /* trail surrogate before lead surrogate */
-        *status = JSONFailure;
-        parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(processed_ptr, count(0)));
-        return NULL;
+        return JSONFailure;
     }
     unprocessed_ptr += 3;
-    *un_skip = unprocessed_ptr - unprocessed;
-    *status = JSONSuccess;
-    return processed_ptr;
+    *processed = processed_ptr;
+    *unprocessed = unprocessed_ptr;
+    return JSONSuccess;
 }
-
 
 /* Copies and processes passed string up to supplied length.
 Example: "\u006Corem ipsum" -> lorem ipsum */
@@ -642,8 +618,6 @@ static char* process_string(const char *input : itype(_Nt_array_ptr<const char>)
     _Nt_array_ptr<const char> input_ptr : count(len) = input;
     size_t initial_size = (len + 1) * sizeof(char);
     size_t final_size = 0;
-    size_t utf16_in_skip, utf16_out_len;
-    int utf16_status;
 
     _Nt_array_ptr<char> output : count(len+1) = (_Nt_array_ptr<char>)parson_malloc(char, initial_size+1);
     if (output == NULL) {
@@ -665,13 +639,13 @@ static char* process_string(const char *input : itype(_Nt_array_ptr<const char>)
                 case 'u':
                 {
                     _Unchecked {
-                        _Nt_array_ptr<char> utf16_processed = parse_utf16(_Assume_bounds_cast<_Nt_array_ptr<char>>(input_ptr, count(0)), &utf16_in_skip, &utf16_out_len, &utf16_status);
-                        if (utf16_status == JSONFailure) {
+                        const char *input_tmp = (const char *) input_ptr;
+                        char *output_tmp = (char *) output_ptr;
+                        if (parse_utf16(&input_tmp, &output_tmp) == JSONFailure) {
                             goto error;
                         }
-                        input_ptr += utf16_in_skip;
-                        memcpy(_Assume_bounds_cast<_Nt_array_ptr<char>>(output_ptr, count(utf16_out_len)), _Assume_bounds_cast<_Nt_array_ptr<char>>(utf16_processed, count(utf16_out_len)), utf16_out_len);
-                        output_ptr += utf16_out_len;
+                        input_ptr = _Assume_bounds_cast<_Nt_array_ptr<const char>>(input_tmp, count(len));
+                        output_ptr = _Assume_bounds_cast<_Nt_array_ptr<char>>(output_tmp, count(len));
                         break;
                     }
                 }
