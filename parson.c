@@ -510,7 +510,7 @@ static JSON_Status json_array_resize(JSON_Array *array : itype(_Ptr<JSON_Array>)
     // We know that the capacity is bigger than the count from the earlier if statement.
     // TODO: The compiler can't do a >= comparison, so unneeded dynamic bounds cast.
     if (array->items != NULL && array->count > 0) {
-        memcpy(_Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(new_items, byte_count(array->count * sizeof(_Ptr<JSON_Value>))), 
+        memcpy<_Ptr<JSON_Value>>(_Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(new_items, byte_count(array->count * sizeof(_Ptr<JSON_Value>))),
                _Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(array->items, byte_count(array->count * sizeof(_Ptr<JSON_Value>))), 
                array->count * sizeof(_Ptr<JSON_Value>));
     }
@@ -695,7 +695,7 @@ static char* process_string(const char *input : itype(_Nt_array_ptr<const char>)
         goto error;
     }
     _Nt_array_ptr<char> tmp_rebounded_output : count(final_size) = _Dynamic_bounds_cast<_Nt_array_ptr<char>>(output, count(final_size));
-    memcpy(resized_output, tmp_rebounded_output, final_size);
+    memcpy<char>(resized_output, tmp_rebounded_output, final_size);
     // TODO Compiler should be able to tell that the size of output is >= 0!
     parson_free(char, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(output, count(0)));
     return resized_output;
@@ -1136,7 +1136,7 @@ static int append_string(_Nt_array_ptr<char> buf : count(len), _Nt_array_ptr<con
     }
 
     // Why does string need a cast but not buf? Shrink string by 1, effectively
-    memcpy(buf, _Dynamic_bounds_cast<_Array_ptr<char>>(string, count(len)), len);
+    memcpy<char>(buf, _Dynamic_bounds_cast<_Array_ptr<char>>(string, count(len)), len);
     return len;
 }
 
@@ -1712,7 +1712,7 @@ JSON_Status json_array_remove(JSON_Array *array : itype(_Ptr<JSON_Array>), size_
     }
     json_value_free(json_array_get_value(array, ix));
     to_move_bytes = (json_array_get_count(array) - 1 - ix) * sizeof(_Ptr<JSON_Value>);
-    memmove(_Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(array->items + ix, byte_count(to_move_bytes)), _Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(array->items + ix + 1, byte_count(to_move_bytes)), to_move_bytes);
+    memmove<_Ptr<JSON_Value>>(_Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(array->items + ix, byte_count(to_move_bytes)), _Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(array->items + ix + 1, byte_count(to_move_bytes)), to_move_bytes);
     array->count -= 1;
     return JSONSuccess;
 }
