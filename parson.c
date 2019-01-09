@@ -61,6 +61,12 @@ static JSON_Free_Function parson_free;
 #define parson_free(T, buf) (free<T>(buf))
 #define parson_free_unchecked(buf) (free(buf))
 
+static _Nt_array_ptr<char> parson_string_malloc(size_t sz) : count(sz) _Unchecked {
+  char *p = parson_malloc(char, sz + 1);
+  if (p != NULL)
+    p[sz] = 0;
+  return _Assume_bounds_cast<_Nt_array_ptr<char>>(p, count(sz));
+}
 
 #define IS_CONT(b) (((unsigned char)(b) & 0xC0) == 0x80) /* is utf-8 continuation byte */
 
@@ -96,10 +102,9 @@ struct json_array_t {
 };
 
 /* Various */
-static _Nt_array_ptr<char> read_file(_Nt_array_ptr<const char>filename, _Ptr<size_t> file_len) : bounds(_Return_value, _Return_value + *file_len);
-static size_t  get_file_len(_Nt_array_ptr<const char> filename);
+static _Nt_array_ptr<char> read_file(_Nt_array_ptr<const char>filename);
 static void                remove_comments(char *string : itype(_Nt_array_ptr<char>), const char *start_token : itype(_Nt_array_ptr<const char>), const char *end_token : itype(_Nt_array_ptr<const char> ) );
-static _Nt_array_ptr<char> parson_strndup(const char *string : itype(_Nt_array_ptr<const char>) count(n), size_t n) : count(n);
+static _Nt_array_ptr<char> parson_strndup(const char *string : itype(_Nt_array_ptr<const char>), size_t n);
 static _Nt_array_ptr<char> parson_strdup(_Nt_array_ptr<const char> string);
 static int    hex_char_to_int(char c);
 static int    parse_utf16_hex(const char *s : itype(_Nt_array_ptr<const char> ) , _Ptr<unsigned int> result);
@@ -151,23 +156,18 @@ static int    append_string(_Nt_array_ptr<char> buf : bounds(buf_start, buf_star
                             _Nt_array_ptr<char> buf_start, size_t buf_len);
 
 /* Various */
-static _Nt_array_ptr<char> parson_strndup(const char *string : itype(_Nt_array_ptr<const char>) count(n), size_t n) : count(n) {
-    _Nt_array_ptr<char> output_string : byte_count(n) = (_Nt_array_ptr<char>)parson_malloc(char, n + 1);
+static _Nt_array_ptr<char> parson_strndup(const char *string : itype(_Nt_array_ptr<const char>), size_t n) {
+    _Nt_array_ptr<char> output_string : byte_count(n) = parson_string_malloc(n);
     if (!output_string) {
         return NULL;
     }
-    output_string[n] = '\0';
     strncpy(output_string, string, n);
+    output_string[n] = '\0';
     return output_string;
 }
 
 static _Nt_array_ptr<char> parson_strdup(_Nt_array_ptr<const char> string) {
-    size_t len = strlen(string);
-    _Nt_array_ptr<const char> tmp : count(len) = NULL;
-    _Unchecked {
-        tmp = _Assume_bounds_cast<_Nt_array_ptr<const char>>(string, count(len));
-    }
-    return parson_strndup(tmp, len);
+    return parson_strndup(string, strlen(string));
 }
 
 static int hex_char_to_int(char c) {
@@ -289,24 +289,9 @@ static int is_decimal(const char *string : itype(_Nt_array_ptr<const char>) coun
     return 1;
 }
 
-static size_t get_file_len(_Nt_array_ptr<const char> filename)
-{
+static _Nt_array_ptr<char> read_file(_Nt_array_ptr<const char> filename) {
     _Ptr<FILE> fp = fopen(filename, "r");
-    long pos;
-    if (!fp) {
-        return 0;
-    }
-    fseek(fp, 0L, SEEK_END);
-    pos = ftell(fp);
-    fclose(fp);
-    if (pos < 0) {
-        return 0;
-    }
-    return (size_t)pos;
-}
-
-static _Nt_array_ptr<char> read_file(_Nt_array_ptr<const char> filename, _Ptr<size_t> file_size) : bounds(_Return_value, _Return_value + *file_size) {
-    _Ptr<FILE> fp = fopen(filename, "r");
+    size_t file_size;
     long pos;
     if (!fp) {
         return NULL;
@@ -317,14 +302,15 @@ static _Nt_array_ptr<char> read_file(_Nt_array_ptr<const char> filename, _Ptr<si
         fclose(fp);
         return NULL;
     }
-    *file_size = pos;
+    file_size = pos;
     rewind(fp);
-    _Nt_array_ptr<char> file_contents : count(*file_size * (size_t)1) = (_Nt_array_ptr<char>)parson_malloc(char, (*file_size + 1));
+    // TODO: compiler isn't constant folding when checking bounds, so we need the spurious (size_t) 1 here.
+    _Nt_array_ptr<char> file_contents : count(file_size * (size_t) 1)  = parson_string_malloc(file_size * (size_t) 1);
     if (!file_contents) {
         fclose(fp);
         return NULL;
     }
-    if (fread(file_contents, *file_size, 1, fp) < 1) {
+    if (fread(file_contents, file_size, 1, fp) < 1) {
         if (ferror(fp)) {
             fclose(fp);
             parson_free(char, _Dynamic_bounds_cast<_Array_ptr<char>>(file_contents, byte_count(1)));
@@ -332,7 +318,7 @@ static _Nt_array_ptr<char> read_file(_Nt_array_ptr<const char> filename, _Ptr<si
         }
     }
     fclose(fp);
-    file_contents[*file_size] = '\0';
+    file_contents[file_size] = '\0';
     return file_contents;
 }
 
@@ -621,15 +607,15 @@ _Unchecked static int parse_utf16(const char **unprocessed, char **processed) {
 /* Copies and processes passed string up to supplied length.
 Example: "\u006Corem ipsum" -> lorem ipsum */
 static char* process_string(const char *input : itype(_Nt_array_ptr<const char>) count(len), size_t len) : itype(_Nt_array_ptr<char>) {
-    _Nt_array_ptr<const char> input_ptr : count(len) = input;
+    _Nt_array_ptr<const char> input_ptr : bounds(input, input + len) = input;
     size_t initial_size = (len + 1) * sizeof(char);
     size_t final_size = 0;
 
-    _Nt_array_ptr<char> output : count(len+1) = (_Nt_array_ptr<char>)parson_malloc(char, initial_size+1);
+    _Nt_array_ptr<char> output : count(initial_size) = parson_string_malloc(initial_size);
     if (output == NULL) {
         goto error;
     }
-    _Nt_array_ptr<char> output_ptr : count(len + 1) = output;
+    _Nt_array_ptr<char> output_ptr : bounds(output, output +  initial_size) = output;
     while ((*input_ptr != '\0') && (size_t)(input_ptr - input) < len) {
         if (*input_ptr == '\\') {
             input_ptr++;
@@ -650,8 +636,8 @@ static char* process_string(const char *input : itype(_Nt_array_ptr<const char>)
                         if (parse_utf16(&input_tmp, &output_tmp) == JSONFailure) {
                             goto error;
                         }
-                        input_ptr = _Assume_bounds_cast<_Nt_array_ptr<const char>>(input_tmp, count(len));
-                        output_ptr = _Assume_bounds_cast<_Nt_array_ptr<char>>(output_tmp, count(len));
+                        input_ptr = _Assume_bounds_cast<_Nt_array_ptr<const char>>(input_tmp, bounds(input, input + len));
+                        output_ptr = _Assume_bounds_cast<_Nt_array_ptr<char>>(output_tmp, bounds(output, output + initial_size));
                         break;
                     }
                 }
@@ -840,7 +826,7 @@ static _Ptr<JSON_Value> parse_string_value(const char **string : itype(_Ptr<_Nt_
 static JSON_Value* parse_boolean_value(const char **string : itype(_Ptr<_Nt_array_ptr<const char>>)) : itype(_Ptr<JSON_Value>) {
     size_t true_token_size = SIZEOF_TOKEN("true");
     size_t false_token_size = SIZEOF_TOKEN("false");
-    // TODO: Cannot prove bounds for string big enough to cmp. Is that ok?
+    // TODO: the compiler should warn about the += on string below.
     if (strncmp("true", *string, true_token_size) == 0) {
         *string += true_token_size;
         return json_value_init_boolean(1);
@@ -1084,12 +1070,8 @@ static int json_serialize_string(const char *str_unbounded : itype(_Nt_array_ptr
             case '\x1e': APPEND_STRING("\\u001e"); break;
             case '\x1f': APPEND_STRING("\\u001f"); break;
             default:
-                // TODO Odd error about "source bounds are an empty range" - can't prove buf is big enough
-                // buf is allocated statically as [1100]. Why is that enough?
                 if (buf != NULL) {
-                    _Unchecked {
-                        buf[0] = c;
-                    }
+                    buf[0] = c;
                     buf += 1;
                 }
                 written_total += 1;
@@ -1130,17 +1112,7 @@ static int append_string(_Nt_array_ptr<char> buf : bounds(buf_start, buf_start +
 
 /* Parser API */
 JSON_Value * json_parse_file(const char *filename : itype(_Nt_array_ptr<const char>)) : itype(_Ptr<JSON_Value>) {
-    size_t file_len = get_file_len(filename);
-
-    // TODO: Future work: have count(file_len) here and pass down
-    _Nt_array_ptr<char> file_contents = NULL;
-    _Unchecked {
-        char* tmp = (char*)read_file((_Nt_array_ptr<const char>)filename, &file_len);
-        if (tmp != NULL) {
-            // TODO: Future work: have count(file_len) here and figure out how to pass to parse_string_with_comments
-            file_contents = _Assume_bounds_cast<_Nt_array_ptr<char>>(tmp, count(0));
-        }
-    }   
+    _Nt_array_ptr<char> file_contents = read_file(filename);
     _Ptr<JSON_Value> output_value = NULL;
     if (file_contents == NULL) {
         return NULL;
@@ -1151,16 +1123,7 @@ JSON_Value * json_parse_file(const char *filename : itype(_Nt_array_ptr<const ch
 }
 
 JSON_Value * json_parse_file_with_comments(const char *filename : itype(_Nt_array_ptr<const char>)) : itype(_Ptr<JSON_Value>) {
-     size_t file_len = get_file_len(filename);
-    
-    // TODO: Future work: have count(file_len) here and pass down
-    _Nt_array_ptr<char> file_contents = NULL;
-    _Unchecked {
-        char* tmp = (char*)read_file((_Nt_array_ptr<const char>)filename, &file_len);
-        if (tmp != NULL) {
-            file_contents = _Assume_bounds_cast<_Nt_array_ptr<char>>(tmp, count(0));
-        }
-    }   
+    _Nt_array_ptr<char> file_contents = read_file(filename);
     _Ptr<JSON_Value> output_value = NULL;
     if (file_contents == NULL) {
         return NULL;
@@ -1233,7 +1196,7 @@ int json_object_get_boolean(const JSON_Object *object : itype(_Ptr<const JSON_Ob
 }
 
 JSON_Value * json_object_dotget_value(const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>)) : itype(_Ptr<JSON_Value>) {
-    _Nt_array_ptr<const char> dot_position : bounds(name, name+0) = strchr(name, '.');
+    _Nt_array_ptr<const char> dot_position = strchr(name, '.');
     if (!dot_position) {
         return json_object_get_value(object, name);
     }
@@ -1612,7 +1575,7 @@ char * json_serialize_to_string(const JSON_Value *value : itype(_Ptr<const JSON_
     if (buf_size_bytes == 0) {
         return NULL;
     }
-    _Nt_array_ptr<char> buf : byte_count(buf_size_bytes) = (_Nt_array_ptr<char>)parson_malloc(char, buf_size_bytes + 1);
+    _Nt_array_ptr<char> buf : byte_count(buf_size_bytes) = parson_string_malloc(buf_size_bytes);
     if (buf == NULL) {
         return NULL;
     }
@@ -1673,7 +1636,7 @@ char * json_serialize_to_string_pretty(const JSON_Value *value : itype(_Ptr<cons
     if (buf_size_bytes == 0) {
         return NULL;
     }
-    _Nt_array_ptr<char> buf : byte_count(buf_size_bytes) = (_Nt_array_ptr<char>)parson_malloc(char, buf_size_bytes+1);
+    _Nt_array_ptr<char> buf : byte_count(buf_size_bytes) = parson_string_malloc(buf_size_bytes);
     if (buf == NULL) {
         return NULL;
     }
@@ -1864,26 +1827,18 @@ JSON_Status json_object_set_null(JSON_Object *object : itype(_Ptr<JSON_Object>),
 }
 
 JSON_Status json_object_dotset_value(JSON_Object *object : itype(_Ptr<JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>), JSON_Value *value : itype(_Ptr<JSON_Value>)) {
-    _Nt_array_ptr<const char> dot_pos : bounds(name, name+0) = NULL;
+    _Nt_array_ptr<const char> dot_pos = NULL;
     _Nt_array_ptr<char> current_name = NULL;
     _Ptr<JSON_Object> temp_obj = NULL;
     _Ptr<JSON_Value> new_value = NULL;
     if (object == NULL || name == NULL || value == NULL) {
         return JSONFailure;
     }
-    dot_pos = strchr(name, '.'); // TODO: Should eventually have bounds(name, dot_pos)
-    _Nt_array_ptr<const char> dot_pos_copy : bounds(name, dot_pos) = NULL;
-    _Unchecked {
-        dot_pos_copy = _Assume_bounds_cast<_Nt_array_ptr<const char>>(dot_pos, bounds(name, dot_pos));
-    }
+    dot_pos = strchr(name, '.');
     if (dot_pos == NULL) {
         return json_object_set_value(object, name, value);
     } else {
-        _Nt_array_ptr<const char> tmp_name : count((size_t)(dot_pos_copy - name)) = NULL;
-        _Unchecked {
-            tmp_name = _Assume_bounds_cast<_Nt_array_ptr<char>>(name, bounds(name, name + (size_t)(dot_pos_copy - name)));
-        }
-        current_name = parson_strndup(tmp_name, (size_t)(dot_pos_copy - name));
+        current_name = parson_strndup(name, (size_t)(dot_pos - name));
         temp_obj = json_object_get_object(object, current_name);
         if (temp_obj == NULL) {
             new_value = json_value_init_object();
@@ -1978,17 +1933,13 @@ JSON_Status json_object_remove(JSON_Object *object : itype(_Ptr<JSON_Object>), c
 }
 
 JSON_Status json_object_dotremove(JSON_Object *object : itype(_Ptr<JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>)) {
-    _Nt_array_ptr<const char> dot_pos : bounds(name, name+0)= strchr(name, '.');
+    _Nt_array_ptr<const char> dot_pos = strchr(name, '.');
     _Nt_array_ptr<char> current_name = NULL;
     _Ptr<JSON_Object> temp_obj = NULL;
     if (dot_pos == NULL) {
         return json_object_remove(object, name);
     } else {
-         _Nt_array_ptr<const char> tmp_name : count((size_t)(dot_pos - name)) = NULL;
-        _Unchecked {
-            tmp_name = _Assume_bounds_cast<_Nt_array_ptr<char>>(name, bounds(name, name + (size_t)(dot_pos - name)));
-        }
-        current_name = parson_strndup(tmp_name, (size_t)(dot_pos - name));
+        current_name = parson_strndup(name, (size_t)(dot_pos - name));
         temp_obj = json_object_get_object(object, current_name);
         parson_free(char, current_name);
         if (temp_obj == NULL) {
