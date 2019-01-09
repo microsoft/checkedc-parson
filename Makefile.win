@@ -1,0 +1,17 @@
+CC = clang
+CFLAGS = -O0 -g -gcodeview -Wall -Wextra -std=c99 -pedantic-errors
+
+PROGRAM = test.exe
+
+all: test
+
+.PHONY: compile test
+test: tests.c parson.c
+	$(CC) $(CFLAGS) -o $(PROGRAM) tests.c parson.c
+	.\$(PROGRAM)
+
+compile:
+	$(CC) $(CFLAGS) -o $(PROGRAM) tests.c parson.c
+
+clean:
+	del /q /f test.exe *.o
