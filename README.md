@@ -1,7 +1,7 @@
 # About
 
 This Checked C version of parson is a fork of the parson JSON parsing library by kgabis (<https://github.com/kgabis/parson)>).
-The code is converted into Checked C to provide bounds guarantees from the compiler (see <https://github.com/Microsoft/checked-c> for more information).
+The code is converted into Checked C to provide bounds guarantees from the compiler (see <https://github.com/Microsoft/checkedc> for more information).
 DO **NOT** USE THIS CODE IN PRODUCTION. It is not kept up to date with the main parson project.
 
 # Usage
