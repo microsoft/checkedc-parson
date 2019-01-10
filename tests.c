@@ -1,6 +1,9 @@
 /*
- Parson ( http://kgabis.github.com/parson/ )
- Copyright (c) 2012 - 2017 Krzysztof Gabis
+ Checked C Parson
+ Copyright (c) Microsoft Corporation. All rights reserved.
+ Portions Copyright (c) 2012 - 2017 Krzysztof Gabis
+ https://github.com/kgabis/parson//
+ Licensed under the MIT License
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
