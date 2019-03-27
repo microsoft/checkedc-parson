@@ -29,10 +29,10 @@
 
 #include "parson.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <math.h>
+#include <stdio_checked.h>
+#include <stdlib_checked.h>
+#include <string_checked.h>
+#include <math_checked.h>
 
 #define TEST(A) printf("%d %-72s-", __LINE__, #A);\
                 if(A){puts(" OK");tests_passed++;}\
