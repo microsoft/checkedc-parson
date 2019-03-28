@@ -67,7 +67,7 @@
 #define parson_free_unchecked(buf) (free(buf))
 
 static _Nt_array_ptr<char> parson_string_malloc(size_t sz) : count(sz) _Unchecked {
-  char *p = parson_malloc(char, sz + 1);
+  char *p = (char*)parson_malloc(char, sz + 1);
   if (p != NULL)
     p[sz] = 0;
   return _Assume_bounds_cast<_Nt_array_ptr<char>>(p, count(sz));
@@ -110,7 +110,7 @@ struct json_array_t {
 
 /* Various */
 static _Nt_array_ptr<char> read_file(_Nt_array_ptr<const char> filename);
-static void                remove_comments(_Nt_array_ptr<char> string, _Nt_array_ptr<const char> start_token, _Nt_array_ptr<const char> end_token);
+static void                remove_comments(char* string : itype(_Nt_array_ptr<char>), _Nt_array_ptr<const char> start_token, _Nt_array_ptr<const char> end_token);
 static _Nt_array_ptr<char> parson_strndup(_Nt_array_ptr<const char> string : count(n), size_t n);
 static _Nt_array_ptr<char> parson_strdup(_Nt_array_ptr<const char> string);
 static int                 hex_char_to_int(char c);
@@ -171,7 +171,11 @@ static _Nt_array_ptr<char> parson_strndup(_Nt_array_ptr<const char> string : cou
 
 static _Nt_array_ptr<char> parson_strdup(_Nt_array_ptr<const char> string) {
     size_t len = strlen(string);
-    return parson_strndup(_Dynamic_bounds_cast<_Nt_array_ptr<const char>>(string, count(len)), len);
+    _Nt_array_ptr<const char> str_with_len : count(len) = NULL;
+    _Unchecked {
+        str_with_len = _Assume_bounds_cast<_Nt_array_ptr<const char>>(string, count(len));
+    }
+    return parson_strndup(str_with_len, len);
 }
 
 static int hex_char_to_int(char c) {
@@ -327,11 +331,10 @@ static _Nt_array_ptr<char> read_file(_Nt_array_ptr<const char> filename) {
     return (_Nt_array_ptr<char>)file_contents;
 }
 
-static void remove_comments(_Nt_array_ptr<char> string, _Nt_array_ptr<const char> start_token, _Nt_array_ptr<const char> end_token) {
+static void remove_comments(char* string : itype(_Nt_array_ptr<char>), _Nt_array_ptr<const char> start_token, _Nt_array_ptr<const char> end_token) {
     int in_string = 0, escaped = 0;
     size_t i;
     _Unchecked {
-        char* ptr = NULL;
         char current_char;
         size_t start_token_len = strlen(start_token);
         size_t end_token_len = strlen(end_token);
@@ -345,19 +348,25 @@ static void remove_comments(_Nt_array_ptr<char> string, _Nt_array_ptr<const char
                 continue;
             } else if (current_char == '\"' && !escaped) {
                 in_string = !in_string;
-            } else if (!in_string && strncmp(string, start_token, start_token_len) == 0) {
-                for(i = 0; i < start_token_len; i++) {
-                    string[i] = ' ';
+            // TODO: Can't prove this
+            } else {
+                _Unchecked {
+                    if (!in_string && strncmp(string, start_token, start_token_len) == 0) {
+                        for(i = 0; i < start_token_len; i++) {
+                            string[i] = ' ';
+                        }
+                        string = string + start_token_len;
+                        char* ptr = strstr(string, end_token);
+                        if (!ptr) {
+                            return;
+                        }
+                        for (i = 0; i < (ptr - string) + end_token_len; i++) {
+                            string[i] = ' ';
+                        }
+                        // TODO: Don't understand the compiler warning here. Yes string bounds have changed to ptr, ptr + 0, what is the complaint?
+                        string = _Assume_bounds_cast<_Nt_array_ptr<char>>(ptr + end_token_len - 1, count(0));
+                    }
                 }
-                string = string + start_token_len;
-                ptr = strstr(string, end_token);
-                if (!ptr) {
-                    return;
-                }
-                for (i = 0; i < (ptr - string) + end_token_len; i++) {
-                    string[i] = ' ';
-                }
-                string = _Assume_bounds_cast<_Nt_array_ptr<char>>(ptr + end_token_len - 1, count(0));
             }
             escaped = 0;
             string++;
@@ -384,7 +393,12 @@ static JSON_Status json_object_add(_Ptr<JSON_Object> object, _Nt_array_ptr<const
         return JSONFailure;
     }
     size_t nameLen = strlen(name);
-    return json_object_addn(object, _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(name, count(nameLen)), nameLen, value);
+    _Nt_array_ptr<const char> name_with_len : count(nameLen) = NULL;
+    _Unchecked {
+        name_with_len = _Assume_bounds_cast<_Nt_array_ptr<const char>>(name, count(nameLen));
+    }
+
+    return json_object_addn(object, name_with_len, nameLen, value);
 }
 
 static JSON_Status json_object_addn(_Ptr<JSON_Object> object, _Nt_array_ptr<const char> name : count(name_len), size_t name_len, _Ptr<JSON_Value> value) {
@@ -420,11 +434,11 @@ static JSON_Status json_object_resize(_Ptr<JSON_Object> object, size_t new_capac
     }
 
     _Unchecked {
-        char** temp_names = parson_malloc(char*, new_capacity * sizeof(char*));
+        char** temp_names = (char**)parson_malloc(char*, new_capacity * sizeof(char*));
         if (temp_names == NULL) {
             return JSONFailure;
         }
-        JSON_Value** temp_values = parson_malloc(JSON_Value*, new_capacity * sizeof(JSON_Value*));
+        JSON_Value** temp_values = (JSON_Value**)parson_malloc(JSON_Value*, new_capacity * sizeof(JSON_Value*));
         if (temp_values == NULL) {
             parson_free_unchecked(temp_names);
             return JSONFailure;
@@ -496,14 +510,19 @@ static JSON_Status json_object_dotremove_internal(_Ptr<JSON_Object> object, _Nt_
     if (dot_pos == NULL) {
         return json_object_remove_internal(object, name, free_value);
     }
-    temp_value = json_object_getn_value(object, 
-                                        _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(name, count((size_t)(dot_pos - name))), 
-                                        (size_t)(dot_pos - name));
+    _Nt_array_ptr<const char> before_dot : count((size_t)(dot_pos - name)) = NULL;
+    _Unchecked {
+        before_dot = _Assume_bounds_cast<_Nt_array_ptr<const char>>(name, count((size_t)(dot_pos - name)));
+    }
+    temp_value = json_object_getn_value(object, before_dot, (size_t)(dot_pos - name));
     if (json_value_get_type(temp_value) != JSONObject) {
         return JSONFailure;
     }
     temp_object = json_value_get_object(temp_value);
-    _Nt_array_ptr<const char> after_dot = _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(dot_pos + 1, bounds(after_dot, after_dot + 0));
+    _Nt_array_ptr<const char> after_dot = NULL;
+    _Unchecked {
+        after_dot = _Assume_bounds_cast<_Nt_array_ptr<const char>>(dot_pos + 1, count(0));
+    }
     return json_object_dotremove_internal(temp_object, after_dot, free_value);
 }
 
@@ -544,7 +563,7 @@ static JSON_Status json_array_add(_Ptr<JSON_Array> array, _Ptr<JSON_Value> value
     return JSONSuccess;
 }
 
-static JSON_Status json_array_resize(_Ptr<JSON_Array> array, size_t new_capacity) {
+static JSON_Status _Checked json_array_resize(_Ptr<JSON_Array> array, size_t new_capacity) {
     _Array_ptr<_Ptr<JSON_Value>> new_items : count(new_capacity) = NULL;
     if (new_capacity == 0 || new_capacity < array-> count) {
         return JSONFailure;
@@ -556,7 +575,7 @@ static JSON_Status json_array_resize(_Ptr<JSON_Array> array, size_t new_capacity
     // We know that the capacity is bigger than the count from the earlier if statement.
     // TODO: The compiler can't do a >= comparison, so unneeded dynamic bounds cast.
     if (array->items != NULL && array->count > 0) {
-        memcpy(_Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(new_items, byte_count(array->count * sizeof(_Ptr<JSON_Value>))), 
+        memcpy<_Ptr<JSON_Value>>(_Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(new_items, byte_count(array->count * sizeof(_Ptr<JSON_Value>))), 
                _Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(array->items, byte_count(array->count * sizeof(_Ptr<JSON_Value>))), 
                array->count * sizeof(_Ptr<JSON_Value>));
     }
@@ -712,7 +731,7 @@ static _Nt_array_ptr<char> process_string(_Nt_array_ptr<const char> input : coun
     if (resized_output == NULL) {
         goto error;
     }
-    memcpy(resized_output, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(output, count(final_size)), final_size);
+    memcpy<char>(resized_output, _Dynamic_bounds_cast<_Nt_array_ptr<char>>(output, count(final_size)), final_size);
     parson_free(char, output);
     return resized_output;
 error:
@@ -724,14 +743,19 @@ error:
    skips passed argument to a matching quote. */
 static _Nt_array_ptr<char> get_quoted_string(_Ptr<_Nt_array_ptr<const char>> string) {
     _Nt_array_ptr<const char> string_start = *string;
+
     size_t string_len = 0;
     JSON_Status status = skip_quotes(string);
     if (status != JSONSuccess) {
         return NULL;
     }
     string_len = *string - string_start - 2; /* length without quotes */
-    _Nt_array_ptr<const char> tmp_string : count(string_len) = _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(string_start + 1, count(string_len));
-    return process_string(tmp_string, string_len);
+    // TODO: We can't figure this out dynamically
+    _Nt_array_ptr<const char> one_past_start : count(string_len) = NULL;
+    _Unchecked {
+        one_past_start = _Assume_bounds_cast<_Nt_array_ptr<const char>>(string_start + 1, count(string_len));
+    }
+    return process_string(one_past_start, string_len);
 }
 
 static _Ptr<JSON_Value> parse_value(_Ptr<_Nt_array_ptr<const char>> string, size_t nesting) {
@@ -1066,8 +1090,12 @@ static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, char* buf, i
     }
 }
 
-static int json_serialize_string(_Nt_array_ptr<const char> string, char* buf) {
-    size_t i = 0, len = strlen(string);
+static int json_serialize_string(_Nt_array_ptr<const char> str_unbounded, char* buf) {
+    size_t i = 0, len = strlen(str_unbounded);
+    _Nt_array_ptr<const char> string : count(len) = NULL;
+    _Unchecked {
+        string = _Assume_bounds_cast<_Nt_array_ptr<const char>>(str_unbounded, count(len));
+    }
     char c = '\0';
     int written = -1, written_total = 0;
     APPEND_STRING("\"");
@@ -1210,8 +1238,12 @@ JSON_Value * json_object_get_value(const JSON_Object *object : itype(_Ptr<const 
     if (object == NULL || name == NULL) {
         return NULL;
     }
-    size_t name_len = strlen(name);
-    return json_object_getn_value(object, _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(name, count(name_len)), name_len);
+    size_t nameLen = strlen(name);
+    _Nt_array_ptr<const char> name_with_len : count(nameLen) = NULL;
+    _Unchecked {
+        name_with_len = _Assume_bounds_cast<_Nt_array_ptr<const char>>(name, count(nameLen));
+    }
+    return json_object_getn_value(object, name_with_len, nameLen);
 }
 
 const char * json_object_get_string(const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>)) : itype(_Nt_array_ptr<const char>) {
@@ -1239,9 +1271,11 @@ JSON_Value * json_object_dotget_value(const JSON_Object *object : itype(_Ptr<con
     if (!dot_position) {
         return json_object_get_value(object, name);
     }
-    object = json_value_get_object(json_object_getn_value(object, 
-                                                          _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(name, count((size_t)(dot_position - name))), 
-                                                          (size_t)(dot_position - name)));
+    _Nt_array_ptr<const char> after_dot : count((size_t)(dot_position - name)) = NULL;
+    _Unchecked {
+        after_dot = _Assume_bounds_cast<_Nt_array_ptr<const char>>(name, count((size_t)(dot_position - name)));
+    }
+    object = json_value_get_object(json_object_getn_value(object, after_dot, (size_t)(dot_position - name)));
     return json_object_dotget_value(object, dot_position + 1);
 }
 
@@ -1425,10 +1459,14 @@ JSON_Value * json_value_init_string(const char *string : itype(_Nt_array_ptr<con
         return NULL;
     }
     string_len = strlen(string);
-    if (!is_valid_utf8((_Dynamic_bounds_cast<_Nt_array_ptr<const char>>(string, count(string_len))), string_len)) {
+    _Nt_array_ptr<const char> str_with_len : count(string_len) = NULL;
+    _Unchecked {
+        str_with_len = _Assume_bounds_cast<_Nt_array_ptr<const char>>(string, count(string_len));
+    }
+    if (!is_valid_utf8(str_with_len, string_len)) {
         return NULL;
     }
-    copy = parson_strndup((_Dynamic_bounds_cast<_Nt_array_ptr<const char>>(string, count(string_len))), string_len);
+    copy = parson_strndup(str_with_len, string_len);
     if (copy == NULL) {
         return NULL;
     }
@@ -1862,12 +1900,19 @@ JSON_Status json_object_dotset_value(JSON_Object *object : itype(_Ptr<JSON_Objec
         return JSONFailure;
     }
     dot_pos = (_Nt_array_ptr<const char>)strchr(name, '.');
-    _Nt_array_ptr<const char> after_dot = _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(dot_pos + 1, count(0));
+    _Nt_array_ptr<const char> after_dot = NULL;
+    _Unchecked {
+        after_dot = _Assume_bounds_cast<_Nt_array_ptr<const char>>(dot_pos + 1, count(0));
+    }
     if (dot_pos == NULL) {
         return json_object_set_value(object, name, value);
     }
     name_len = dot_pos - name;
-    temp_value = json_object_getn_value(object, _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(name, count(name_len)), name_len);
+    _Nt_array_ptr<const char> name_with_len : count(name_len) = NULL;
+    _Unchecked {
+        name_with_len = _Assume_bounds_cast<_Nt_array_ptr<const char>>(name, count(name_len));
+    }
+    temp_value = json_object_getn_value(object, name_with_len, name_len);
     if (temp_value) {
         /* Don't overwrite existing non-object (unlike json_object_set_value, but it shouldn't be changed at this point) */
         if (json_value_get_type(temp_value) != JSONObject) {
@@ -1886,7 +1931,7 @@ JSON_Status json_object_dotset_value(JSON_Object *object : itype(_Ptr<JSON_Objec
         json_value_free(new_value);
         return JSONFailure;
     }
-    status = json_object_addn(object, _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(name, count(name_len)), name_len, new_value);
+    status = json_object_addn(object, name_with_len, name_len, new_value);
     if (status != JSONSuccess) {
         json_object_dotremove_internal(new_object, after_dot, 0);
         json_value_free(new_value);
@@ -2114,6 +2159,9 @@ int json_boolean(const JSON_Value *value : itype(_Ptr<const JSON_Value>)) {
 
 // TODO: Right now this won't work at all
 void json_set_allocation_functions(JSON_Malloc_Function malloc_fun, JSON_Free_Function free_fun) {
+    if(malloc_fun || free_fun) {
+        printf("We should be doing something here!\n");
+    }
     return;
     /*parson_malloc = malloc_fun;
     parson_free = free_fun;*/
