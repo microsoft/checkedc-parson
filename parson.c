@@ -764,7 +764,6 @@ static _Nt_array_ptr<char> get_quoted_string(_Ptr<_Nt_array_ptr<const char>> str
 
 static _Ptr<JSON_Value> parse_value(_Ptr<_Nt_array_ptr<const char>> string, size_t nesting) {
     if (nesting > MAX_NESTING) {
-        fprintf(stderr, "Nope, too much nesting\n");
         return NULL;
     }
     SKIP_WHITESPACES(string);
@@ -1194,11 +1193,8 @@ JSON_Value * json_parse_file(const char *filename : itype(_Nt_array_ptr<const ch
     if (file_contents == NULL) {
         return NULL;
     }
-    fprintf(stderr, "\nread in file\n");
     output_value = json_parse_string(file_contents);
-    fprintf(stderr, "parsing done\n");
     parson_free(char, file_contents);
-    fprintf(stderr, "freeing done\n");
     return output_value;
 }
 
