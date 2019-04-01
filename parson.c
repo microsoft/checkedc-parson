@@ -62,6 +62,10 @@
 #define IS_NUMBER_INVALID(x) (((x) * 0.0) != 0.0)
 #endif
 
+
+static JSON_Malloc_Function parson_malloc;
+static JSON_Free_Function parson_free;
+
 #define parson_malloc(t, sz) (malloc<t>(sz))
 #define parson_free(t, p)   (free<t>(_Dynamic_bounds_cast<_Array_ptr<t>>(p, byte_count(0))))
 #define parson_free_unchecked(buf) (free(buf))
@@ -760,6 +764,7 @@ static _Nt_array_ptr<char> get_quoted_string(_Ptr<_Nt_array_ptr<const char>> str
 
 static _Ptr<JSON_Value> parse_value(_Ptr<_Nt_array_ptr<const char>> string, size_t nesting) {
     if (nesting > MAX_NESTING) {
+        fprintf(stderr, "Nope, too much nesting\n");
         return NULL;
     }
     SKIP_WHITESPACES(string);
@@ -1189,8 +1194,11 @@ JSON_Value * json_parse_file(const char *filename : itype(_Nt_array_ptr<const ch
     if (file_contents == NULL) {
         return NULL;
     }
+    fprintf(stderr, "\nread in file\n");
     output_value = json_parse_string(file_contents);
+    fprintf(stderr, "parsing done\n");
     parson_free(char, file_contents);
+    fprintf(stderr, "freeing done\n");
     return output_value;
 }
 
@@ -2157,14 +2165,14 @@ int json_boolean(const JSON_Value *value : itype(_Ptr<const JSON_Value>)) {
     return json_value_get_boolean(value);
 }
 
-// TODO: Right now this won't work at all
 void json_set_allocation_functions(JSON_Malloc_Function malloc_fun, JSON_Free_Function free_fun) {
     if(malloc_fun || free_fun) {
-        printf("We should be doing something here!\n");
+        #undef parson_malloc
+        #undef parson_free
+        parson_malloc = malloc_fun;
+        parson_free = free_fun;
     }
     return;
-    /*parson_malloc = malloc_fun;
-    parson_free = free_fun;*/
 }
 
 void json_set_escape_slashes(int escape_slashes) {

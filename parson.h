@@ -34,6 +34,8 @@ extern "C"
 
 #include <stddef.h>   /* size_t */
 
+#pragma CHECKED_SCOPE ON
+
 /* Types and enums */
 typedef struct json_object_t JSON_Object;
 typedef struct json_array_t  JSON_Array;
@@ -56,8 +58,12 @@ enum json_result_t {
 };
 typedef int JSON_Status;
 
-typedef void * (*JSON_Malloc_Function)(size_t);
-typedef void   (*JSON_Free_Function)(void *);
+
+typedef _Itype_for_any(T) void * tmp_malloc_fun(size_t s) : byte_count(s) itype(_Array_ptr<T>);
+typedef _Itype_for_any(T) void tmp_free_fun(void * : byte_count(0) itype(_Array_ptr<T>));
+typedef _Ptr<tmp_malloc_fun> JSON_Malloc_Function;
+typedef _Ptr<tmp_free_fun> JSON_Free_Function;
+
 
 /* Call only once, before calling any other function from parson API. If not called, malloc and free
    from stdlib will be used for all allocations */
@@ -124,10 +130,10 @@ int           json_object_get_boolean(const JSON_Object *object : itype(_Ptr<con
  just like in structs or c++/java/c# objects (e.g. objectA.objectB.value).
  Because valid names in JSON can contain dots, some values may be inaccessible
  this way. */
-JSON_Value  * json_object_dotget_value  (const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>));
-const char  * json_object_dotget_string (const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>));
-JSON_Object * json_object_dotget_object (const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>));
-JSON_Array  * json_object_dotget_array  (const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>));
+JSON_Value  * json_object_dotget_value  (const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>)) : itype(_Ptr<JSON_Value>);
+const char  * json_object_dotget_string (const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>)) : itype(_Nt_array_ptr<const char>);
+JSON_Object * json_object_dotget_object (const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>)) : itype(_Ptr<JSON_Object>);
+JSON_Array  * json_object_dotget_array  (const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>)) : itype(_Ptr<JSON_Array>);
 double        json_object_dotget_number (const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>)); /* returns 0 on fail */
 int           json_object_dotget_boolean(const JSON_Object *object : itype(_Ptr<const JSON_Object>), const char *name : itype(_Nt_array_ptr<const char>)); /* returns -1 on fail */
 
@@ -209,13 +215,13 @@ JSON_Status json_array_append_null(JSON_Array *array : itype(_Ptr<JSON_Array>));
 /*
  *JSON Value
  */
-JSON_Value * json_value_init_object (void)                                                  : itype(_Ptr<JSON_Value>);
-JSON_Value * json_value_init_array  (void)                                                  : itype(_Ptr<JSON_Value>);
-JSON_Value * json_value_init_string (const char *string : itype(_Nt_array_ptr<const char>)) : itype(_Ptr<JSON_Value>); /* copies passed string */
-JSON_Value * json_value_init_number (double number)                                         : itype(_Ptr<JSON_Value>);
-JSON_Value * json_value_init_boolean(int boolean)                                           : itype(_Ptr<JSON_Value>);
-JSON_Value * json_value_init_null   (void)                                                  : itype(_Ptr<JSON_Value>);
-JSON_Value * json_value_deep_copy   (const JSON_Value *value)                               : itype(_Ptr<JSON_Value>);
+JSON_Value * json_value_init_object (void)                                                    : itype(_Ptr<JSON_Value>);
+JSON_Value * json_value_init_array  (void)                                                    : itype(_Ptr<JSON_Value>);
+JSON_Value * json_value_init_string (const char *string : itype(_Nt_array_ptr<const char>))   : itype(_Ptr<JSON_Value>); /* copies passed string */
+JSON_Value * json_value_init_number (double number)                                           : itype(_Ptr<JSON_Value>);
+JSON_Value * json_value_init_boolean(int boolean)                                             : itype(_Ptr<JSON_Value>);
+JSON_Value * json_value_init_null   (void)                                                    : itype(_Ptr<JSON_Value>);
+JSON_Value * json_value_deep_copy   (const JSON_Value *value : itype(_Ptr<const JSON_Value>)) : itype(_Ptr<JSON_Value>);
 void         json_value_free        (JSON_Value *value : itype(_Ptr<JSON_Value>));
 
 JSON_Value_Type json_value_get_type   (const JSON_Value *value : itype(_Ptr<const JSON_Value>));
@@ -233,6 +239,8 @@ JSON_Array  *   json_array  (const JSON_Value *value : itype(_Ptr<const JSON_Val
 const char  *   json_string (const JSON_Value *value : itype(_Ptr<const JSON_Value>)) : itype(_Nt_array_ptr<const char>);
 double          json_number (const JSON_Value *value : itype(_Ptr<const JSON_Value>));
 int             json_boolean(const JSON_Value *value : itype(_Ptr<const JSON_Value>));
+
+#pragma CHECKED_SCOPE OFF
 
 #ifdef __cplusplus
 }
