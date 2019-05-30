@@ -32,9 +32,10 @@ extern "C"
 {
 #endif
 
-#include <stddef.h>   /* size_t */
+#pragma CHECKED_SCOPE push
+#pragma CHECKED_SCOPE on
 
-#pragma CHECKED_SCOPE ON
+#include <stddef.h>   /* size_t */
 
 /* Types and enums */
 typedef struct json_object_t JSON_Object;
@@ -240,7 +241,7 @@ const char  *   json_string (const JSON_Value *value : itype(_Ptr<const JSON_Val
 double          json_number (const JSON_Value *value : itype(_Ptr<const JSON_Value>));
 int             json_boolean(const JSON_Value *value : itype(_Ptr<const JSON_Value>));
 
-#pragma CHECKED_SCOPE OFF
+#pragma CHECKED_SCOPE pop
 
 #ifdef __cplusplus
 }

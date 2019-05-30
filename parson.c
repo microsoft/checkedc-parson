@@ -29,6 +29,9 @@
 #endif /* _CRT_SECURE_NO_WARNINGS */
 #endif /* _MSC_VER */
 
+#pragma CHECKED_SCOPE push
+#pragma CHECKED_SCOPE on
+
 #include "parson.h"
 
 #include <stdio_checked.h>
@@ -38,7 +41,6 @@
 #include <math_checked.h>
 #include <errno_checked.h>
 
-#pragma CHECKED_SCOPE ON
 
 /* Apparently sscanf is not implemented in some "standard" libraries, so don't use it, if you
  * don't have to. */
@@ -73,6 +75,8 @@ static JSON_Free_Function parson_free;
 #define parson_free_unchecked(buf) (free(buf))
 
 static _Nt_array_ptr<char> parson_string_malloc(size_t sz) : count(sz) _Unchecked {
+  if(sz >= SIZE_MAX) 
+    return null;
   char *p = (char*)parson_malloc(char, sz + 1);
   if (p != NULL)
     p[sz] = 0;
@@ -123,7 +127,7 @@ static int                 hex_char_to_int(char c);
 static int _Unchecked      parse_utf16_hex(const char* string, unsigned int* result);
 static int                 num_bytes_in_utf8_sequence(unsigned char c);
 static int                 verify_utf8_sequence(_Nt_array_ptr<const unsigned char> string, _Ptr<int> len); // len is set after, not a constraint on string
-static int                 is_valid_utf8(_Nt_array_ptr<const char> string : count(string_len), size_t string_len);
+static int                 is_valid_utf8(_Nt_array_ptr<const char> string : bounds(string, string + string_len), size_t string_len);
 static int                 is_decimal(const char* string : itype(_Nt_array_ptr<const char>) count(length), size_t length);
 
 /* JSON Object */
@@ -273,7 +277,7 @@ static int verify_utf8_sequence(_Nt_array_ptr<const unsigned char> s, _Ptr<int> 
     return 1;
 }
 
-static int is_valid_utf8(_Nt_array_ptr<const char> string : count(string_len), size_t string_len) {
+static int is_valid_utf8(_Nt_array_ptr<const char> string : bounds(string, string + string_len), size_t string_len) {
     int len = 0;
     _Nt_array_ptr<const char> string_end = _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(string + string_len, count(0));
     while (string < string_end) {
@@ -569,7 +573,7 @@ static JSON_Status json_array_add(_Ptr<JSON_Array> array, _Ptr<JSON_Value> value
     return JSONSuccess;
 }
 
-static JSON_Status _Checked json_array_resize(_Ptr<JSON_Array> array, size_t new_capacity) {
+static JSON_Status json_array_resize(_Ptr<JSON_Array> array, size_t new_capacity) {
     _Array_ptr<_Ptr<JSON_Value>> new_items : count(new_capacity) = NULL;
     if (new_capacity == 0 || new_capacity < array-> count) {
         return JSONFailure;
@@ -2200,4 +2204,4 @@ void json_set_escape_slashes(int escape_slashes) {
     parson_escape_slashes = escape_slashes;
 }
 
-#pragma CHECKED_SCOPE OFF
+#pragma CHECKED_SCOPE pop
