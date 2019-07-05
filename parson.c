@@ -30,6 +30,10 @@
 #endif /* _MSC_VER */
 
 #pragma CHECKED_SCOPE push
+#pragma CHECKED_SCOPE off
+
+#include <ctype.h> /* On Windows this needs a bounds safe interface or to be outside checked scope */
+
 #pragma CHECKED_SCOPE on
 
 #include "parson.h"
@@ -37,7 +41,6 @@
 #include <stdio_checked.h>
 #include <stdlib_checked.h>
 #include <string_checked.h>
-#include <ctype.h>
 #include <math_checked.h>
 #include <errno_checked.h>
 
