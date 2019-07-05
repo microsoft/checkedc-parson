@@ -1016,7 +1016,7 @@ static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, char* buf : 
                 APPEND_STRING("\n");
             }
             for (i = 0; i < count; i++) {
-                key = (_Nt_array_ptr<const char>)json_object_get_name(object, i);
+                key = json_object_get_name(object, i);
                 if (key == NULL) {
                     return -1;
                 }
@@ -1574,7 +1574,7 @@ JSON_Value * json_value_deep_copy(const JSON_Value *value : itype(_Ptr<const JSO
             }
             temp_object_copy = json_value_get_object(return_value);
             for (i = 0; i < json_object_get_count(temp_object); i++) {
-                temp_key = (_Nt_array_ptr<const char>)json_object_get_name(temp_object, i);
+                temp_key = json_object_get_name(temp_object, i);
                 temp_value = json_object_get_value(temp_object, temp_key);
                 temp_value_copy = json_value_deep_copy(temp_value);
                 if (temp_value_copy == NULL) {
