@@ -79,7 +79,7 @@ static JSON_Free_Function parson_free;
 
 static _Nt_array_ptr<char> parson_string_malloc(size_t sz) : count(sz) _Unchecked {
   if(sz >= SIZE_MAX) 
-    return null;
+    return NULL;
   char *p = (char*)parson_malloc(char, sz + 1);
   if (p != NULL)
     p[sz] = 0;
