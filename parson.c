@@ -376,7 +376,7 @@ static void remove_comments(char* string : itype(_Nt_array_ptr<char>), _Nt_array
                         for (i = 0; i < (ptr - string) + end_token_len; i++) {
                             string[i] = ' ';
                         }
-                        // TODO: Don't understand the compiler warning here. Yes string bounds have changed to ptr, ptr + 0, what is the complaint?
+                        
                         string = _Assume_bounds_cast<_Nt_array_ptr<char>>(ptr + end_token_len - 1, count(0));
                     }
                 }
