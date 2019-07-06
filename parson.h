@@ -90,13 +90,13 @@ JSON_Value * json_parse_string_with_comments(const char *string : itype(_Nt_arra
 
 /* Serialization */
 size_t      json_serialization_size(const JSON_Value *value : itype(_Ptr<const JSON_Value>)); /* returns 0 on fail */
-JSON_Status json_serialize_to_buffer(const JSON_Value *value : itype(_Ptr<const JSON_Value>), char *buf : itype(_Array_ptr<char>) byte_count(buf_size_in_bytes), size_t buf_size_in_bytes);
+JSON_Status json_serialize_to_buffer(const JSON_Value *value : itype(_Ptr<const JSON_Value>), char *buf : itype(_Nt_array_ptr<char>) byte_count(buf_size_in_bytes), size_t buf_size_in_bytes);
 JSON_Status json_serialize_to_file(const JSON_Value *value : itype(_Ptr<const JSON_Value>), const char *filename : itype(_Nt_array_ptr<const char>));
 char *      json_serialize_to_string(const JSON_Value *value : itype(_Ptr<const JSON_Value>)) : itype(_Nt_array_ptr<char>);
 
 /* Pretty serialization */
 size_t      json_serialization_size_pretty(const JSON_Value *value : itype(_Ptr<const JSON_Value>)); /* returns 0 on fail */
-JSON_Status json_serialize_to_buffer_pretty(const JSON_Value *value : itype(_Ptr<const JSON_Value>), char *buf : itype(_Array_ptr<char>) byte_count(buf_size_in_bytes), size_t buf_size_in_bytes);
+JSON_Status json_serialize_to_buffer_pretty(const JSON_Value *value : itype(_Ptr<const JSON_Value>), char *buf : itype(_Nt_array_ptr<char>) byte_count(buf_size_in_bytes), size_t buf_size_in_bytes);
 JSON_Status json_serialize_to_file_pretty(const JSON_Value *value : itype(_Ptr<const JSON_Value>), const char *filename : itype(_Nt_array_ptr<const char>));
 char *      json_serialize_to_string_pretty(const JSON_Value *value : itype(_Ptr<const JSON_Value>)) : itype(_Nt_array_ptr<char>);
 

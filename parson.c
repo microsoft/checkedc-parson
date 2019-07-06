@@ -166,10 +166,10 @@ static _Ptr<JSON_Value>       parse_null_value(_Ptr<_Nt_array_ptr<const char>> s
 static _Ptr<JSON_Value>       parse_value(_Ptr<_Nt_array_ptr<const char>> string, size_t nesting);
 
 /* Serialization */
-static int            json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, char* buf : itype(_Nt_array_ptr<char>), int level, int is_pretty, _Array_ptr<char> num_buf : count(NUM_BUF_SIZE));
-static int            json_serialize_string(_Nt_array_ptr<const char> string, char* buf : itype(_Nt_array_ptr<char>));
-static int _Unchecked append_indent(char* buf : itype(_Nt_array_ptr<char>), int level);
-static int _Unchecked append_string(char* buf : itype(_Nt_array_ptr<char>), const char* string : itype(_Nt_array_ptr<const char>));
+static int            json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, _Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len), int level, int is_pretty, _Nt_array_ptr<char> num_buf, _Nt_array_ptr<char> buf_start : byte_count(buf_len), size_t buf_len);
+static int            json_serialize_string(_Nt_array_ptr<const char> string, _Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len), _Nt_array_ptr<char> buf_start : byte_count(buf_len), size_t buf_len);
+static int _Unchecked append_indent(_Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len), int level, _Nt_array_ptr<char> buf_start : byte_count(buf_len), size_t buf_len);
+static int _Unchecked append_string(_Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len), _Nt_array_ptr<const char> string, _Nt_array_ptr<char> buf_start : byte_count(buf_len), size_t buf_len);
 
 /* Various */
 static _Nt_array_ptr<char> parson_strndup(_Nt_array_ptr<const char> string : count(n), size_t n) {
@@ -956,17 +956,18 @@ static _Ptr<JSON_Value> parse_null_value(_Ptr<_Nt_array_ptr<const char>> string)
 }
 
 /* Serialization */
-#define APPEND_STRING(str) do { written = append_string(buf, (str));\
+
+#define APPEND_STRING(str) do { written = append_string(buf, (str), buf_start, buf_len);\
                                 if (written < 0) { return -1; }\
                                 if (buf != NULL) { buf += written; }\
                                 written_total += written; } while(0)
 
-#define APPEND_INDENT(level) do { written = append_indent(buf, (level));\
+#define APPEND_INDENT(level) do { written = append_indent(buf, (level), buf_start, buf_len);\
                                   if (written < 0) { return -1; }\
                                   if (buf != NULL) { buf += written; }\
                                   written_total += written; } while(0)
 
-static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, char* buf : itype(_Nt_array_ptr<char>), int level, int is_pretty, _Array_ptr<char> num_buf : count(NUM_BUF_SIZE)) {
+static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, _Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len), int level, int is_pretty, _Nt_array_ptr<char> num_buf, _Nt_array_ptr<char> buf_start : byte_count(buf_len), size_t buf_len) {
     _Nt_array_ptr<const char> key = NULL, string = NULL;
     _Ptr<JSON_Value> temp_value = NULL;
     _Ptr<JSON_Array> array = NULL;
@@ -988,7 +989,7 @@ static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, char* buf : 
                     APPEND_INDENT(level+1);
                 }
                 temp_value = json_array_get_value(array, i);
-                written = json_serialize_to_buffer_r(temp_value, buf, level+1, is_pretty, num_buf);
+                written = json_serialize_to_buffer_r(temp_value, buf, level+1, is_pretty, num_buf, buf_start, buf_len);
                 if (written < 0) {
                     return -1;
                 }
@@ -1023,7 +1024,7 @@ static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, char* buf : 
                 if (is_pretty) {
                     APPEND_INDENT(level+1);
                 }
-                written = json_serialize_string(key, buf);
+                written = json_serialize_string(key, buf, buf_start, buf_len);
                 if (written < 0) {
                     return -1;
                 }
@@ -1036,7 +1037,7 @@ static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, char* buf : 
                     APPEND_STRING(" ");
                 }
                 temp_value = json_object_get_value(object, key);
-                written = json_serialize_to_buffer_r(temp_value, buf, level+1, is_pretty, num_buf);
+                written = json_serialize_to_buffer_r(temp_value, buf, level+1, is_pretty, num_buf, buf_start, buf_len);
                 if (written < 0) {
                     return -1;
                 }
@@ -1057,11 +1058,11 @@ static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, char* buf : 
             APPEND_STRING("}");
             return written_total;
         case JSONString:
-            string = (_Nt_array_ptr<const char>)json_value_get_string(value);
+            string = json_value_get_string(value);
             if (string == NULL) {
                 return -1;
             }
-            written = json_serialize_string(string, buf);
+            written = json_serialize_string(string, buf, buf_start, buf_len);
             if (written < 0) {
                 return -1;
             }
@@ -1079,10 +1080,10 @@ static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, char* buf : 
             return written_total;
         case JSONNumber:
             num = json_value_get_number(value);
+            if (buf != NULL) {
+                num_buf = _Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(0));
+            }
             _Unchecked {
-                if (buf != NULL) {
-                    num_buf = _Assume_bounds_cast<_Nt_array_ptr<char>>(buf, count(NUM_BUF_SIZE));
-                }
                 written = sprintf((char*)num_buf, FLOAT_FORMAT, num);
             }
             if (written < 0) {
@@ -1103,7 +1104,10 @@ static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, char* buf : 
     }
 }
 
-static int json_serialize_string(_Nt_array_ptr<const char> str_unbounded, char* buf : itype(_Nt_array_ptr<char>)) {
+static int json_serialize_string(_Nt_array_ptr<const char> str_unbounded, 
+                                 _Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len), 
+                                 _Nt_array_ptr<char> buf_start : byte_count(buf_len), 
+                                 size_t buf_len) {
     size_t i = 0, len = strlen(str_unbounded);
     _Nt_array_ptr<const char> string : count(len) = NULL;
     _Unchecked {
@@ -1176,8 +1180,10 @@ static int json_serialize_string(_Nt_array_ptr<const char> str_unbounded, char* 
     return written_total;
 }
 
-// TODO: Unsafe!
-static int _Unchecked append_indent(char* buf, int level) {
+static int append_indent(_Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len),
+                         int level, 
+                         _Nt_array_ptr<char> buf_start : byte_count(buf_len), 
+                         size_t buf_len) {
     int i;
     int written = -1, written_total = 0;
     for (i = 0; i < level; i++) {
@@ -1186,14 +1192,24 @@ static int _Unchecked append_indent(char* buf, int level) {
     return written_total;
 }
 
-// TODO: Unsafe!
-static int _Unchecked append_string(char* buf, const char* string) {
+static int append_string(_Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len),
+                         _Nt_array_ptr<const char> string,
+                         _Nt_array_ptr<char> buf_start : byte_count(buf_len),
+                         size_t buf_len) {
+    size_t len = strlen(string);
     if (buf == NULL) {
-        return (int)strlen(string);
+        return (int) len;
     }
-    return sprintf(buf, "%s", string);
-}
 
+    // TODO: This does not go through properly if bounded string is a const char, as it should be
+    _Array_ptr<char> boundedString : count(len) = _Dynamic_bounds_cast<_Array_ptr<char>>(string, count(len));
+    _Dynamic_check(buf >= buf_start && buf + len < buf_start + buf_len);
+    memcpy<char>(_Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(len)), 
+                 boundedString, 
+                 len);
+    buf[len] = '\0';
+    return len;
+}
 #undef APPEND_STRING
 #undef APPEND_INDENT
 
@@ -1616,26 +1632,23 @@ JSON_Value * json_value_deep_copy(const JSON_Value *value : itype(_Ptr<const JSO
 }
 
 size_t json_serialization_size(const JSON_Value *value : itype(_Ptr<const JSON_Value>)) {
-    char num_buf _Checked[NUM_BUF_SIZE]; /* recursively allocating buffer on stack is a bad idea, so let's do it only once */
-    int res = json_serialize_to_buffer_r(value, NULL, 0, 0, num_buf);
+    char num_buf _Nt_checked[NUM_BUF_SIZE]; /* recursively allocating buffer on stack is a bad idea, so done statically */
+    int res = json_serialize_to_buffer_r(value, NULL, 0, 0, num_buf, NULL, 0);
     return res < 0 ? 0 : (size_t)(res + 1);
 }
 
-JSON_Status json_serialize_to_buffer(const JSON_Value *value : itype(_Ptr<const JSON_Value>), char *buf : itype(_Array_ptr<char>) byte_count(buf_size_in_bytes), size_t buf_size_in_bytes) {
+JSON_Status json_serialize_to_buffer(const JSON_Value *value : itype(_Ptr<const JSON_Value>),  char *buf : itype(_Nt_array_ptr<char>) byte_count(buf_size_in_bytes), size_t buf_size_in_bytes) {
     int written = -1;
     size_t needed_size_in_bytes = json_serialization_size(value);
     if (needed_size_in_bytes == 0 || buf_size_in_bytes < needed_size_in_bytes) {
         return JSONFailure;
     }
-    _Nt_array_ptr<char> str_buf : count(0) = NULL;
-    _Unchecked{
-        buf[buf_size_in_bytes-1] = '\0';
-        str_buf = _Assume_bounds_cast<_Nt_array_ptr<char>>(buf, count(0));
-    }
-    written = json_serialize_to_buffer_r(value, str_buf, 0, 0, NULL);
+    written = json_serialize_to_buffer_r(value, buf, 0, 0, NULL, buf, buf_size_in_bytes);
     if (written < 0) {
+        buf[0] = '\0';
         return JSONFailure;
     }
+    buf[written] = '\0';
     return JSONSuccess;
 }
 
@@ -1664,43 +1677,41 @@ JSON_Status json_serialize_to_file(const JSON_Value *value : itype(_Ptr<const JS
 char * json_serialize_to_string(const JSON_Value *value : itype(_Ptr<const JSON_Value>)) : itype(_Nt_array_ptr<char>) {
     JSON_Status serialization_result = JSONFailure;
     size_t buf_size_bytes = json_serialization_size(value);
-    _Array_ptr<char> buf : byte_count(buf_size_bytes) = NULL;
+    _Nt_array_ptr<char> buf : byte_count(buf_size_bytes) = NULL;
     if (buf_size_bytes == 0) {
         return NULL;
     }
-    buf = parson_malloc(char, buf_size_bytes);
+    buf = parson_string_malloc(buf_size_bytes);
     if (buf == NULL) {
         return NULL;
     }
     serialization_result = json_serialize_to_buffer(value, buf, buf_size_bytes);
     if (serialization_result == JSONFailure) {
-        json_free_serialized_string((_Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(0))));
+        json_free_serialized_string(_Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(0)));
         return NULL;
     }
-    return (_Nt_array_ptr<char>)buf;
+    return buf;
 }
 
 size_t json_serialization_size_pretty(const JSON_Value *value : itype(_Ptr<const JSON_Value>)) {
-    char num_buf _Checked[NUM_BUF_SIZE]; /* recursively allocating buffer on stack is a bad idea, so let's do it only once */
-    int res = json_serialize_to_buffer_r(value, NULL, 0, 1, _Dynamic_bounds_cast<_Array_ptr<char>>(num_buf, count(NUM_BUF_SIZE)));
+    char num_buf _Nt_checked[NUM_BUF_SIZE]; /* recursively allocating buffer on stack is a bad idea, so let's do it only once */
+    int res = json_serialize_to_buffer_r(value, NULL, 0, 1, num_buf, NULL, 0);
     return res < 0 ? 0 : (size_t)(res + 1);
 }
 
-JSON_Status json_serialize_to_buffer_pretty(const JSON_Value *value : itype(_Ptr<const JSON_Value>), char *buf : itype(_Array_ptr<char>) byte_count(buf_size_in_bytes), size_t buf_size_in_bytes) {
+JSON_Status json_serialize_to_buffer_pretty(const JSON_Value *value : itype(_Ptr<const JSON_Value>), char *buf : itype(_Nt_array_ptr<char>) byte_count(buf_size_in_bytes), size_t buf_size_in_bytes) {
     int written = -1;
     size_t needed_size_in_bytes = json_serialization_size_pretty(value);
     if (needed_size_in_bytes == 0 || buf_size_in_bytes < needed_size_in_bytes) {
         return JSONFailure;
     }
-    _Nt_array_ptr<char> str_buf : count(0) = NULL;
-    _Unchecked{
-        buf[buf_size_in_bytes-1] = '\0';
-        str_buf = _Assume_bounds_cast<_Nt_array_ptr<char>>(buf, count(0));
-    }
-    written = json_serialize_to_buffer_r(value, str_buf, 0, 1, NULL);
+    written = json_serialize_to_buffer_r(value, buf, 0, 1, NULL, buf, buf_size_in_bytes);
     if (written < 0) {
+        buf[0] = '\0';
         return JSONFailure;
     }
+    
+    buf[written] = '\0';
     return JSONSuccess;
 }
 
@@ -1729,11 +1740,11 @@ JSON_Status json_serialize_to_file_pretty(const JSON_Value *value : itype(_Ptr<c
 char * json_serialize_to_string_pretty(const JSON_Value* value : itype(_Ptr<const JSON_Value>)) : itype(_Nt_array_ptr<char>) {
     JSON_Status serialization_result = JSONFailure;
     size_t buf_size_bytes = json_serialization_size_pretty(value);
-    _Array_ptr<char> buf : byte_count(buf_size_bytes) = NULL;
+    _Nt_array_ptr<char> buf : byte_count(buf_size_bytes) = NULL;
     if (buf_size_bytes == 0) {
         return NULL;
     }
-    buf = parson_malloc(char, buf_size_bytes);
+    buf = parson_string_malloc(buf_size_bytes);
     if (buf == NULL) {
         return NULL;
     }
