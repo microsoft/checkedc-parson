@@ -123,7 +123,7 @@ struct json_array_t {
 
 /* Various */
 static _Nt_array_ptr<char> read_file(_Nt_array_ptr<const char> filename);
-static void                remove_comments(char* string : itype(_Nt_array_ptr<char>), _Nt_array_ptr<const char> start_token, _Nt_array_ptr<const char> end_token);
+static void                remove_comments(_Nt_array_ptr<char> string, _Nt_array_ptr<const char> start_token, _Nt_array_ptr<const char> end_token);
 static _Nt_array_ptr<char> parson_strndup(_Nt_array_ptr<const char> string : count(n), size_t n);
 static _Nt_array_ptr<char> parson_strdup(_Nt_array_ptr<const char> string);
 static int                 hex_char_to_int(char c);
@@ -173,7 +173,7 @@ static int _Unchecked append_string(_Nt_array_ptr<char> buf : bounds(buf_start, 
 
 /* Various */
 static _Nt_array_ptr<char> parson_strndup(_Nt_array_ptr<const char> string : count(n), size_t n) {
-    _Nt_array_ptr<char> output_string : count(n) = (_Nt_array_ptr<char>)parson_malloc(char, n + 1);
+    _Nt_array_ptr<char> output_string : count(n) = parson_string_malloc(n + 1);
     if (!output_string) {
         return NULL;
     }
@@ -331,60 +331,57 @@ static _Nt_array_ptr<char> read_file(_Nt_array_ptr<const char> filename) {
         fclose(fp);
         return NULL;
     }
-    // TODO: Dynamic bounds cast not fixing warning as expected
     size_read = fread(file_contents, 1, size_to_read, fp);
     if (size_read == 0 || ferror(fp)) {
         fclose(fp);
-        // TODO: Shouldn't need this dynamic cast, length of >= 0 should be fine
         parson_free(char, file_contents);
         return NULL;
     }
     fclose(fp);
     file_contents[size_read] = '\0';
-    return (_Nt_array_ptr<char>)file_contents;
+    return file_contents;
 }
 
-static void remove_comments(char* string : itype(_Nt_array_ptr<char>), _Nt_array_ptr<const char> start_token, _Nt_array_ptr<const char> end_token) {
+static void remove_comments(_Nt_array_ptr<char> string, _Nt_array_ptr<const char> start_token, _Nt_array_ptr<const char> end_token) {
     int in_string = 0, escaped = 0;
     size_t i;
-    _Unchecked {
-        char current_char;
-        size_t start_token_len = strlen(start_token);
-        size_t end_token_len = strlen(end_token);
-        if (start_token_len == 0 || end_token_len == 0) {
-            return;
-        }
-        while ((current_char = *string) != '\0') {
-            if (current_char == '\\' && !escaped) {
-                escaped = 1;
-                string++;
-                continue;
-            } else if (current_char == '\"' && !escaped) {
-                in_string = !in_string;
-            // TODO: Can't prove this
-            } else {
-                _Unchecked {
-                    if (!in_string && strncmp(string, start_token, start_token_len) == 0) {
-                        for(i = 0; i < start_token_len; i++) {
-                            string[i] = ' ';
-                        }
-                        string = string + start_token_len;
-                        char* ptr = strstr(string, end_token);
-                        if (!ptr) {
-                            return;
-                        }
-                        for (i = 0; i < (ptr - string) + end_token_len; i++) {
-                            string[i] = ' ';
-                        }
-                        
-                        string = _Assume_bounds_cast<_Nt_array_ptr<char>>(ptr + end_token_len - 1, count(0));
-                    }
-                }
-            }
-            escaped = 0;
+    char current_char;
+    size_t start_token_len = strlen(start_token);
+    size_t end_token_len = strlen(end_token);
+    if (start_token_len == 0 || end_token_len == 0) {
+        return;
+    }
+    while ((current_char = *string) != '\0') {
+        if (current_char == '\\' && !escaped) {
+            escaped = 1;
             string++;
+            continue;
+        } else if (current_char == '\"' && !escaped) {
+            in_string = !in_string;
+        // TODO: Can't prove this
+        } else {
+            _Unchecked {
+                char* unchecked_string = (char*)string;
+                if (!in_string && strncmp(unchecked_string, start_token, start_token_len) == 0) {
+                    for(i = 0; i < start_token_len; i++) {
+                        unchecked_string[i] = ' ';
+                    }
+                    unchecked_string = unchecked_string + start_token_len;
+                    char* ptr = strstr(unchecked_string, end_token);
+                    if (!ptr) {
+                        return;
+                    }
+                    for (i = 0; i < (ptr - unchecked_string) + end_token_len; i++) {
+                        unchecked_string[i] = ' ';
+                    }
+                    
+                    string = _Assume_bounds_cast<_Nt_array_ptr<char>>(ptr + end_token_len - 1, count(0));
+                }
+            } // end _Unchecked
         }
-    } // end _Unchecked
+        escaped = 0;
+        string++;
+    }
 }
 
 /* JSON Object */
@@ -519,7 +516,7 @@ static JSON_Status json_object_remove_internal(_Ptr<JSON_Object> object, _Nt_arr
 static JSON_Status json_object_dotremove_internal(_Ptr<JSON_Object> object, _Nt_array_ptr<const char> name, int free_value) {
     _Ptr<JSON_Value> temp_value = NULL;
     _Ptr<JSON_Object> temp_object = NULL;
-    _Nt_array_ptr<const char> dot_pos = (_Nt_array_ptr<const char>)strchr(name, '.');
+    _Nt_array_ptr<const char> dot_pos = strchr(name, '.');
     if (dot_pos == NULL) {
         return json_object_remove_internal(object, name, free_value);
     }
@@ -697,7 +694,7 @@ static _Nt_array_ptr<char> process_string(_Nt_array_ptr<const char> input : coun
     size_t initial_size = (len + 1) * sizeof(char);
     size_t final_size = 0;
     _Nt_array_ptr<char> output : count(initial_size) = NULL, output_ptr : bounds(output, output + initial_size) = NULL;
-    output = (_Nt_array_ptr<char>)parson_malloc(char, initial_size);
+    output = parson_string_malloc(initial_size);
     if (output == NULL) {
         goto error;
     }
@@ -740,7 +737,7 @@ static _Nt_array_ptr<char> process_string(_Nt_array_ptr<const char> input : coun
     /* resize to new length */
     final_size = (size_t)(output_ptr-output) + 1;
     /* todo: don't resize if final_size == initial_size */
-    _Nt_array_ptr<char> resized_output : count(final_size) = (_Nt_array_ptr<char>)parson_malloc(char, final_size);
+    _Nt_array_ptr<char> resized_output : count(final_size) = parson_string_malloc(final_size);
     if (resized_output == NULL) {
         goto error;
     }
@@ -1080,10 +1077,10 @@ static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, _Nt_array_pt
             return written_total;
         case JSONNumber:
             num = json_value_get_number(value);
-            if (buf != NULL) {
-                num_buf = _Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(0));
-            }
             _Unchecked {
+                if (buf != NULL) {
+                    num_buf = _Assume_bounds_cast<_Nt_array_ptr<char>>(buf, count(0));
+                }
                 written = sprintf((char*)num_buf, FLOAT_FORMAT, num);
             }
             if (written < 0) {
@@ -1202,7 +1199,10 @@ static int append_string(_Nt_array_ptr<char> buf : bounds(buf_start, buf_start +
     }
 
     // TODO: This does not go through properly if bounded string is a const char, as it should be
-    _Array_ptr<char> boundedString : count(len) = _Dynamic_bounds_cast<_Array_ptr<char>>(string, count(len));
+    _Array_ptr<char> boundedString : count(len) = NULL;
+    _Unchecked {
+        boundedString = _Assume_bounds_cast<_Array_ptr<char>>(string, count(len));
+    }
     _Dynamic_check(buf >= buf_start && buf + len < buf_start + buf_len);
     memcpy<char>(_Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(len)), 
                  boundedString, 
@@ -1252,7 +1252,7 @@ JSON_Value * json_parse_string(const char *string : itype(_Nt_array_ptr<const ch
 
 JSON_Value * json_parse_string_with_comments(const char *string : itype(_Nt_array_ptr<const char>)) : itype(_Ptr<JSON_Value>) {
     _Ptr<JSON_Value> result = NULL;    
-    _Nt_array_ptr<char> string_mutable_copy = (_Nt_array_ptr<char>)parson_strdup((_Nt_array_ptr<const char>)string);
+    _Nt_array_ptr<char> string_mutable_copy = parson_strdup((_Nt_array_ptr<const char>)string);
     if (string_mutable_copy == NULL) {
         return NULL;
     }
@@ -1655,7 +1655,7 @@ JSON_Status json_serialize_to_buffer(const JSON_Value *value : itype(_Ptr<const 
 JSON_Status json_serialize_to_file(const JSON_Value *value : itype(_Ptr<const JSON_Value>), const char *filename : itype(_Nt_array_ptr<const char>)) {
     JSON_Status return_code = JSONSuccess;
     _Ptr<FILE> fp = NULL;
-    _Nt_array_ptr<char> serialized_string = (_Nt_array_ptr<char>)json_serialize_to_string(value);
+    _Nt_array_ptr<char> serialized_string = json_serialize_to_string(value);
     if (serialized_string == NULL) {
         return JSONFailure;
     }
@@ -1753,7 +1753,7 @@ char * json_serialize_to_string_pretty(const JSON_Value* value : itype(_Ptr<cons
         json_free_serialized_string(_Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(0)));
         return NULL;
     }
-    return (_Nt_array_ptr<char>)buf;
+    return buf;
 }
 
 void json_free_serialized_string(char *string : itype(_Nt_array_ptr<char>)) {
