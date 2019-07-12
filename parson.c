@@ -78,7 +78,7 @@ static JSON_Free_Function parson_free;
 #define parson_free_unchecked(buf) (free(buf))
 
 static _Nt_array_ptr<char> parson_string_malloc(size_t sz) : count(sz) _Unchecked {
-  if(sz >= SIZE_MAX) 
+  if(sz >= SIZE_MAX)
     return NULL;
   char *p = (char*)parson_malloc(char, sz + 1);
   if (p != NULL)
@@ -457,8 +457,8 @@ static JSON_Status json_object_resize(_Ptr<JSON_Object> object, size_t new_capac
         /* TODO: Memcpy functions below warn "cannot prove argument meets declared 
         * bounds" 1st arg truly won't prove unless new_capacity > object->count, 
         * which isn't checked here! It isn't exactly determined in the caller either.
-        * This sort of means we can't prove the second arg either, since we 
-        * can't really know that count <= capacity. (Even if we could, 
+        * This sort of means we can't prove the second arg either, since we
+        * can't really know that count <= capacity. (Even if we could,
         * the compiler would have trouble with "<")
         *  This reasoning applies to both memcpy functions below. */
         if (object->names != NULL && object->values != NULL && object->count > 0) {
@@ -586,7 +586,7 @@ static JSON_Status json_array_resize(_Ptr<JSON_Array> array, size_t new_capacity
     // TODO: The compiler can't do a >= comparison, so unneeded dynamic bounds cast.
     if (array->items != NULL && array->count > 0) {
         memcpy<_Ptr<JSON_Value>>(_Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(new_items, byte_count(array->count * sizeof(_Ptr<JSON_Value>))), 
-               _Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(array->items, byte_count(array->count * sizeof(_Ptr<JSON_Value>))), 
+               _Dynamic_bounds_cast<_Array_ptr<_Ptr<JSON_Value>>>(array->items, byte_count(array->count * sizeof(_Ptr<JSON_Value>))),
                array->count * sizeof(_Ptr<JSON_Value>));
     }
     parson_free(_Ptr<JSON_Value>, array->items);
@@ -1101,9 +1101,9 @@ static int json_serialize_to_buffer_r(_Ptr<const JSON_Value> value, _Nt_array_pt
     }
 }
 
-static int json_serialize_string(_Nt_array_ptr<const char> str_unbounded, 
-                                 _Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len), 
-                                 _Nt_array_ptr<char> buf_start : byte_count(buf_len), 
+static int json_serialize_string(_Nt_array_ptr<const char> str_unbounded,
+                                 _Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len),
+                                 _Nt_array_ptr<char> buf_start : byte_count(buf_len),
                                  size_t buf_len) {
     size_t i = 0, len = strlen(str_unbounded);
     _Nt_array_ptr<const char> string : count(len) = NULL;
@@ -1178,8 +1178,8 @@ static int json_serialize_string(_Nt_array_ptr<const char> str_unbounded,
 }
 
 static int append_indent(_Nt_array_ptr<char> buf : bounds(buf_start, buf_start + buf_len),
-                         int level, 
-                         _Nt_array_ptr<char> buf_start : byte_count(buf_len), 
+                         int level,
+                         _Nt_array_ptr<char> buf_start : byte_count(buf_len),
                          size_t buf_len) {
     int i;
     int written = -1, written_total = 0;
@@ -1204,8 +1204,8 @@ static int append_string(_Nt_array_ptr<char> buf : bounds(buf_start, buf_start +
         boundedString = _Assume_bounds_cast<_Array_ptr<char>>(string, count(len));
     }
     _Dynamic_check(buf >= buf_start && buf + len < buf_start + buf_len);
-    memcpy<char>(_Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(len)), 
-                 boundedString, 
+    memcpy<char>(_Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(len)),
+                 boundedString,
                  len);
     buf[len] = '\0';
     return len;
@@ -1245,7 +1245,6 @@ JSON_Value * json_parse_string(const char *string : itype(_Nt_array_ptr<const ch
         if (tmp[0] == '\xEF' && tmp[1] == '\xBB' && tmp[2] == '\xBF') {
             string = string + 3; /* Support for UTF-8 BOM */
         }
-    
         return parse_value((_Ptr<_Nt_array_ptr<const char>>)&string, 0);
     }
 }
