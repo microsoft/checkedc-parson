@@ -49,6 +49,7 @@ void test_suite_7(void); /* Test schema validation */
 void test_suite_8(void); /* Test serialization */
 void test_suite_9(void); /* Test serialization (pretty) */
 void test_suite_10(void); /* Testing for memory leaks */
+void test_suite_11(void); /* Additional things that require testing */
 
 void print_commits_info(const char *username, const char *repo);
 void persistence_example(void);
@@ -80,6 +81,8 @@ int main() {
     test_suite_8();
     test_suite_9();
     test_suite_10();
+    test_suite_11();
+
     printf("Tests failed: %d\n", tests_failed);
     printf("Tests passed: %d\n", tests_passed);
     return 0;
@@ -210,7 +213,7 @@ void test_suite_2(JSON_Value *root_value) {
 
     TEST(json_object_get_object(root_object, "empty object") != NULL);
     TEST(json_object_get_array(root_object, "empty array") != NULL);
-    
+
     TEST(json_object_get_wrapping_value(root_object) == root_value);
     array = json_object_get_array(root_object, "string array");
     array_value = json_object_get_value(root_object, "string array");
@@ -316,6 +319,8 @@ void test_suite_4() {
 }
 
 void test_suite_5(void) {
+    double zero = 0.0; /* msvc is silly (workaround for error C2124) */
+
     JSON_Value *val_from_file = json_parse_file("tests/test_5.txt");
 
     JSON_Value *val = NULL, *val_parent;
@@ -391,7 +396,7 @@ void test_suite_5(void) {
     val_parent = json_value_init_null();
     TEST(json_array_replace_value(interests_arr, 0, val_parent) == JSONSuccess);
     TEST(json_array_replace_value(interests_arr, 0, val_parent) == JSONFailure);
-    
+
     TEST(json_object_remove(obj, "interests") == JSONSuccess);
 
     /* UTF-8 tests */
@@ -438,8 +443,8 @@ void test_suite_5(void) {
     TEST(json_value_equals(remove_test_val, json_parse_string("[2, 4]")));
 
     /* Testing nan and inf */
-    TEST(json_object_set_number(obj, "num", 0.0 / 0.0) == JSONFailure);
-    TEST(json_object_set_number(obj, "num", 1.0 / 0.0) == JSONFailure);
+    TEST(json_object_set_number(obj, "num", 0.0 / zero) == JSONFailure);
+    TEST(json_object_set_number(obj, "num", 1.0 / zero) == JSONFailure);
 }
 
 void test_suite_6(void) {
@@ -536,6 +541,24 @@ void test_suite_10(void) {
     TEST(malloc_count == 0);
 }
 
+void test_suite_11() {
+    const char * array_with_slashes = "[\"a/b/c\"]";
+    const char * array_with_escaped_slashes = "[\"a\\/b\\/c\"]";
+    char *serialized = NULL;
+    JSON_Value *value = json_parse_string(array_with_slashes);
+
+    serialized = json_serialize_to_string(value);
+    TEST(STREQ(array_with_escaped_slashes, serialized));
+
+    json_set_escape_slashes(0);
+    serialized = json_serialize_to_string(value);
+    TEST(STREQ(array_with_slashes, serialized));
+
+    json_set_escape_slashes(1);
+    serialized = json_serialize_to_string(value);
+    TEST(STREQ(array_with_escaped_slashes, serialized));
+}
+
 void print_commits_info(const char *username, const char *repo) {
     JSON_Value *root_value;
     JSON_Array *commits;
@@ -612,33 +635,34 @@ void serialization_example(void) {
 
 static char * read_file(const char * filename) {
     FILE *fp = fopen(filename, "r");
-    size_t file_size;
+    size_t size_to_read = 0;
+    size_t size_read = 0;
     long pos;
     char *file_contents;
-    if (!fp)
+    if (!fp) {
         return NULL;
+    }
     fseek(fp, 0L, SEEK_END);
     pos = ftell(fp);
     if (pos < 0) {
         fclose(fp);
         return NULL;
     }
-    file_size = pos;
+    size_to_read = pos;
     rewind(fp);
-    file_contents = (char*)malloc(sizeof(char) * (file_size + 1));
+    file_contents = (char*)malloc(sizeof(char) * (size_to_read + 1));
     if (!file_contents) {
         fclose(fp);
         return NULL;
     }
-    if (fread(file_contents, file_size, 1, fp) < 1) {
-        if (ferror(fp)) {
-            fclose(fp);
-            free(file_contents);
-            return NULL;
-        }
+    size_read = fread(file_contents, 1, size_to_read, fp);
+    if (size_read == 0 || ferror(fp)) {
+        fclose(fp);
+        free(file_contents);
+        return NULL;
     }
     fclose(fp);
-    file_contents[file_size] = '\0';
+    file_contents[size_read] = '\0';
     return file_contents;
 }
 
