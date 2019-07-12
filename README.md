@@ -23,10 +23,11 @@ To build and then run the unit tests `nmake -f Makefile.win` or `nmake -f Makefi
 
 # Branches
 
-baseline: The original C code that the conversion starts from. Note that this is already behind the main parson project.
-This is the version used in Azure's IOT C SDK as of July 2018. This branch should pass all 325 unit tests.
-
-master: The converted Checked C code. This branch should pass all 325 unit tests.
+- baseline: The original C code that the conversion starts from. Note that this is already behind the main parson project.
+This branch should pass all 325 unit tests.
+- master: The converted Checked C code. This branch should pass all 325 unit tests.
+- version1-summer-2018: This was our first take at converting parson to Checked C.  Master has an improved conversion that
+  introduces fewer itypes and adds length arguments in a cleaner fashion.
 
 # License
 
