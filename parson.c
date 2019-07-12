@@ -1709,7 +1709,6 @@ JSON_Status json_serialize_to_buffer_pretty(const JSON_Value *value : itype(_Ptr
         buf[0] = '\0';
         return JSONFailure;
     }
-    
     buf[written] = '\0';
     return JSONSuccess;
 }
