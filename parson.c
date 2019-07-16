@@ -33,6 +33,7 @@
 #pragma CHECKED_SCOPE off
 
 #include <ctype.h> /* On Windows this needs a bounds safe interface or to be outside checked scope */
+#include <stdint.h> /* Needed for SIZE_MAX */
 
 #pragma CHECKED_SCOPE on
 
