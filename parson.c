@@ -174,7 +174,7 @@ static int _Unchecked append_string(_Nt_array_ptr<char> buf : bounds(buf_start, 
 
 /* Various */
 static _Nt_array_ptr<char> parson_strndup(_Nt_array_ptr<const char> string : count(n), size_t n) {
-    _Nt_array_ptr<char> output_string : count(n) = parson_string_malloc(n + 1);
+    _Nt_array_ptr<char> output_string : count(n) = parson_string_malloc(n);
     if (!output_string) {
         return NULL;
     }
@@ -575,7 +575,7 @@ static JSON_Status json_array_add(_Ptr<JSON_Array> array, _Ptr<JSON_Value> value
 }
 
 static JSON_Status json_array_resize(_Ptr<JSON_Array> array, size_t new_capacity) {
-    _Array_ptr<_Ptr<JSON_Value>> new_items : count(new_capacity) = NULL;
+    _Array_ptr<_Ptr<JSON_Value>> new_items : byte_count(new_capacity * sizeof(_Ptr<JSON_Value>)) = NULL;
     if (new_capacity == 0 || new_capacity < array-> count) {
         return JSONFailure;
     }
