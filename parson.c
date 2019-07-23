@@ -75,7 +75,9 @@ static JSON_Malloc_Function parson_malloc;
 static JSON_Free_Function parson_free;
 
 #define parson_malloc(t, sz) (malloc<t>(sz))
-#define parson_free(t, p)   (free<t>(_Dynamic_bounds_cast<_Array_ptr<t>>(p, byte_count(0))))
+#define parson_free(t, p)   (free<t>(p))
+// parson_free_dynamic_bounds_cast is only needed in two cases -- related to incomplete types.
+#define parson_free_dynamic_bounds_cast(t, p)   (free<t>(_Dynamic_bounds_cast<_Array_ptr<t>>(p, byte_count(0))))
 #define parson_free_unchecked(buf) (free(buf))
 
 static _Nt_array_ptr<char> parson_string_malloc(size_t sz) : count(sz) _Unchecked {
@@ -298,7 +300,7 @@ static int is_decimal(const char* string : itype(_Nt_array_ptr<const char>) coun
         return 0;
     }
     // The following dynamic bounds cast should not be needed; length > 2 > 0
-    if (length > 2 && !strncmp(_Dynamic_bounds_cast<_Nt_array_ptr<const char>>(string, count(0)), "-0", 2) && string[2] != '.') {
+    if (length > 2 && !strncmp(string, "-0", 2) && string[2] != '.') {
         return 0;
     }
     while (length--) {
@@ -484,7 +486,7 @@ static JSON_Value* json_object_getn_value(_Ptr<const JSON_Object> object, _Nt_ar
         if (name_length != name_len) {
             continue;
         }
-        if (strncmp(object->names[i], _Dynamic_bounds_cast<_Nt_array_ptr<const char>>(name, count(0)), name_len) == 0) {
+        if (strncmp(object->names[i], name, name_len) == 0) {
             return object->values[i];
         }
     }
@@ -543,8 +545,8 @@ static void json_object_free(_Ptr<JSON_Object> object) {
         parson_free(char, object->names[i]);
         json_value_free(object->values[i]);
     }
-    parson_free(_Array_ptr<char>, object->names);
-    parson_free(_Array_ptr<JSON_Value>, object->values);
+    parson_free(_Nt_array_ptr<char>, object->names);
+    parson_free_dynamic_bounds_cast(_Array_ptr<JSON_Value>, object->values);
     parson_free(JSON_Object, object);
 }
 
@@ -603,7 +605,7 @@ static void json_array_free(_Ptr<JSON_Array> array) {
     for (i = 0; i < array->count; i++) {
         json_value_free(array->items[i]);
     }
-    parson_free(_Array_ptr<JSON_Value>, array->items);
+    parson_free_dynamic_bounds_cast(_Array_ptr<JSON_Value>, array->items);
     parson_free(JSON_Array, array);
 }
 
@@ -1687,7 +1689,7 @@ char * json_serialize_to_string(const JSON_Value *value : itype(_Ptr<const JSON_
     }
     serialization_result = json_serialize_to_buffer(value, buf, buf_size_bytes);
     if (serialization_result == JSONFailure) {
-        json_free_serialized_string(_Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(0)));
+        json_free_serialized_string(buf);
         return NULL;
     }
     return buf;
@@ -1749,7 +1751,7 @@ char * json_serialize_to_string_pretty(const JSON_Value* value : itype(_Ptr<cons
     }
     serialization_result = json_serialize_to_buffer_pretty(value, buf, buf_size_bytes);
     if (serialization_result == JSONFailure) {
-        json_free_serialized_string(_Dynamic_bounds_cast<_Nt_array_ptr<char>>(buf, count(0)));
+        json_free_serialized_string(buf);
         return NULL;
     }
     return buf;
