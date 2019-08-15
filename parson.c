@@ -1950,12 +1950,12 @@ JSON_Status json_object_dotset_value(JSON_Object *object : itype(_Ptr<JSON_Objec
         return JSONFailure;
     }
     dot_pos = (_Nt_array_ptr<const char>)strchr(name, '.');
+    if (dot_pos == NULL) {
+        return json_object_set_value(object, name, value);
+    }
     _Nt_array_ptr<const char> after_dot = NULL;
     _Unchecked {
         after_dot = _Assume_bounds_cast<_Nt_array_ptr<const char>>(dot_pos + 1, count(0));
-    }
-    if (dot_pos == NULL) {
-        return json_object_set_value(object, name, value);
     }
     name_len = dot_pos - name;
     _Nt_array_ptr<const char> name_with_len : count(name_len) = NULL;
